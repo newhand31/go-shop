@@ -1,31 +1,33 @@
-// Command api 是 go-shop 的 HTTP API 進入點。
+// Command api is the HTTP API entry point of go-shop.
 //
-// 目前只是最小可跑的骨架：一個 /healthz 端點。
-// chi router、分層與正式設定從第 1 集開始加。
+// All dependencies are wired by hand in main: no DI container, the whole wiring fits on one screen.
 package main
 
 import (
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/newhand31/go-shop/internal/handler"
+	"github.com/newhand31/go-shop/internal/repository"
+	"github.com/newhand31/go-shop/internal/service"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	addr := os.Getenv("ADDR")
-	if addr == "" {
-		addr = ":8080"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	// Build from the inside out: repository → service → handler.
+	repo := repository.NewMemoryProducts()
+	svc := service.NewProductService(repo)
+	h := handler.New(svc, logger)
 
-	logger.Info("api listening", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	logger.Info("api listening", "port", port)
+	if err := http.ListenAndServe(":"+port, h); err != nil {
 		logger.Error("server stopped", "err", err)
 		os.Exit(1)
 	}
