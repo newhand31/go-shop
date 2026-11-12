@@ -7,6 +7,12 @@
 
 <!-- entries below, newest first -->
 
+## [2026-11-12] 英語市場：另開英文頻道，腳本用英文重寫
+- 選了: 另開英文 YouTube 頻道；同一個 repo、同一個事故與 tag，英文腳本放 docs/scripts/en/，用英文笑點重寫
+- 否決: 同頻道加英文配音音軌（笑點直譯會冷、AI 配音缺個性）；只上英文字幕（英語觀眾少看字幕版技術片）
+- 因為: YouTube 按語言推薦，雙語混在一個頻道互相拖累；重寫最像原生內容。英文版對照以 Java 為主、C# 為輔
+- refs: CLAUDE.md, docs/style-guide.md
+
 ## [2026-11-12] repo 轉公開，程式碼與 commit 英文化
 - 選了: 公開 newhand31/go-shop；首次公開前重建歷史（作者改 noreply、風格指南去掉點名）；程式碼 MIT、docs/ CC BY-NC 4.0；識別字、註解、commit 英文，README 中英雙語
 - 否決: 在原 repo 改寫歷史後直接轉公開：舊 PR 的 force-push 紀錄會留下舊 sha，公開後仍看得到舊樹
