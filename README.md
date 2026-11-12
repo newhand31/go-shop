@@ -26,6 +26,14 @@ go test -tags=integration ./...     # integration tests, starts PostgreSQL via t
 
 After editing `db/queries/*.sql`, regenerate the repository code with `make sqlc` (runs sqlc in Docker).
 
+The HTTP contract lives in `api/openapi.yaml`; after editing it, regenerate `internal/api/api.gen.go` with `make api` (oapi-codegen, pinned version). Every error response has one shape: `{"code", "message", "field"?}`.
+
+```bash
+curl http://localhost:8080/products/1      # one product
+curl http://localhost:8080/products/999    # 404 {"code":"product_not_found",...}
+curl http://localhost:8080/products/abc    # 400 {"code":"invalid_request","field":"id",...}
+```
+
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
 ---
@@ -110,3 +118,11 @@ go test -tags=integration ./...
 ```
 
 改了 `db/queries/*.sql` 之後，用 `make sqlc` 重新產生 repository 程式碼（sqlc 在 Docker 裡跑）。
+
+HTTP 契約寫在 `api/openapi.yaml`；改完用 `make api` 重新產生 `internal/api/api.gen.go`（oapi-codegen，版本固定）。所有錯誤回應都是同一個形狀：`{"code", "message", "field"?}`。
+
+```bash
+curl http://localhost:8080/products/1      # 一件商品
+curl http://localhost:8080/products/999    # 404 {"code":"product_not_found",...}
+curl http://localhost:8080/products/abc    # 400 {"code":"invalid_request","field":"id",...}
+```
