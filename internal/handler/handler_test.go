@@ -29,14 +29,14 @@ func TestRoutes(t *testing.T) {
 		path       string
 		lister     fakeLister
 		wantStatus int
-		wantCount  int // -1 表示不檢查 JSON
+		wantCount  int // -1 means do not check the JSON
 	}{
 		{"healthz", http.MethodGet, "/healthz", fakeLister{}, http.StatusOK, -1},
-		{"products 有資料", http.MethodGet, "/products", fakeLister{items: two}, http.StatusOK, 2},
-		{"products 空清單回 []", http.MethodGet, "/products", fakeLister{}, http.StatusOK, 0},
-		{"products service 出錯", http.MethodGet, "/products", fakeLister{err: errors.New("x")}, http.StatusInternalServerError, -1},
-		{"不存在的路徑", http.MethodGet, "/nope", fakeLister{}, http.StatusNotFound, -1},
-		{"products 不收 POST", http.MethodPost, "/products", fakeLister{}, http.StatusMethodNotAllowed, -1},
+		{"products with data", http.MethodGet, "/products", fakeLister{items: two}, http.StatusOK, 2},
+		{"products empty list returns []", http.MethodGet, "/products", fakeLister{}, http.StatusOK, 0},
+		{"products service error", http.MethodGet, "/products", fakeLister{err: errors.New("x")}, http.StatusInternalServerError, -1},
+		{"unknown path", http.MethodGet, "/nope", fakeLister{}, http.StatusNotFound, -1},
+		{"products rejects POST", http.MethodPost, "/products", fakeLister{}, http.StatusMethodNotAllowed, -1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -50,7 +50,7 @@ func TestRoutes(t *testing.T) {
 			}
 			var got []map[string]any
 			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-				t.Fatalf("body 不是 JSON 陣列: %v (%s)", err, rec.Body.String())
+				t.Fatalf("body is not a JSON array: %v (%s)", err, rec.Body.String())
 			}
 			if len(got) != tt.wantCount {
 				t.Errorf("count = %d, want %d", len(got), tt.wantCount)

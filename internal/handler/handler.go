@@ -1,4 +1,4 @@
-// Package handler 是 HTTP 層：解析請求、呼叫 service、寫回應。不碰 SQL。
+// Package handler is the HTTP layer: parse the request, call the service, write the response. No SQL here.
 package handler
 
 import (
@@ -13,7 +13,7 @@ import (
 	"github.com/newhand31/go-shop/internal/service"
 )
 
-// ProductLister 是 handler 需要的 service 能力，由使用端定義。
+// ProductLister is the service capability the handler needs, defined by the consumer.
 type ProductLister interface {
 	List(ctx context.Context) ([]service.Product, error)
 }
@@ -24,7 +24,7 @@ type productJSON struct {
 	PriceTWD int    `json:"price_twd"`
 }
 
-// New 組出 router。middleware 就是 func(http.Handler) http.Handler。
+// New builds the router. A middleware is just func(http.Handler) http.Handler.
 func New(products ProductLister, logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(RequestLog(logger))
@@ -63,7 +63,7 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
-// RequestLog 以 slog 記錄每個請求的方法、路徑、狀態碼與耗時。
+// RequestLog logs each request's method, path, status code and duration with slog.
 func RequestLog(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

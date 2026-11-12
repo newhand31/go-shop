@@ -1,6 +1,6 @@
-// Command api 是 go-shop 的 HTTP API 進入點。
+// Command api is the HTTP API entry point of go-shop.
 //
-// 所有依賴都在 main 手動組裝：沒有 DI 容器，接線一眼看完。
+// All dependencies are wired by hand in main: no DI container, the whole wiring fits on one screen.
 package main
 
 import (
@@ -21,7 +21,7 @@ func main() {
 		port = "8080"
 	}
 
-	// 由內往外 new：repository → service → handler。
+	// Build from the inside out: repository → service → handler.
 	repo := repository.NewMemoryProducts()
 	svc := service.NewProductService(repo)
 	h := handler.New(svc, logger)

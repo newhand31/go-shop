@@ -23,9 +23,9 @@ func TestProductService_List(t *testing.T) {
 		want    []Product
 		wantErr error
 	}{
-		{"空清單", fakeStore{}, []Product{}, nil},
-		{"對應欄位", fakeStore{rows: []repository.Product{{ID: 1, Name: "a", PriceTWD: 10}}}, []Product{{ID: 1, Name: "a", PriceTWD: 10}}, nil},
-		{"store 出錯要包裝", fakeStore{err: boom}, nil, boom},
+		{"empty list", fakeStore{}, []Product{}, nil},
+		{"maps fields", fakeStore{rows: []repository.Product{{ID: 1, Name: "a", PriceTWD: 10}}}, []Product{{ID: 1, Name: "a", PriceTWD: 10}}, nil},
+		{"wraps store error", fakeStore{err: boom}, nil, boom},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

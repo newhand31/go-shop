@@ -1,21 +1,21 @@
-// Package repository 是資料存取層。第 1 集先用寫死在記憶體的資料，第 2 集換成 PostgreSQL。
+// Package repository is the data access layer. Episode 1 uses hard-coded in-memory data; episode 2 switches to PostgreSQL.
 package repository
 
 import "context"
 
-// Product 是 repository 回傳的具體型別。
+// Product is the concrete type the repository returns.
 type Product struct {
 	ID       int
 	Name     string
 	PriceTWD int
 }
 
-// MemoryProducts 把商品寫死在記憶體裡。
+// MemoryProducts keeps products hard-coded in memory.
 type MemoryProducts struct {
 	items []Product
 }
 
-// NewMemoryProducts 建立內建三件商品的 repository。
+// NewMemoryProducts creates a repository with three built-in products.
 func NewMemoryProducts() *MemoryProducts {
 	return &MemoryProducts{items: []Product{
 		{ID: 1, Name: "機械式鍵盤", PriceTWD: 2490},
@@ -24,7 +24,7 @@ func NewMemoryProducts() *MemoryProducts {
 	}}
 }
 
-// List 回傳全部商品的複本，呼叫端改動不會影響內部資料。
+// List returns a copy of all products, so callers cannot change the internal data.
 func (r *MemoryProducts) List(_ context.Context) ([]Product, error) {
 	out := make([]Product, len(r.items))
 	copy(out, r.items)

@@ -1,4 +1,4 @@
-// Package service 放業務邏輯。它不碰 http.Request。
+// Package service holds the business logic. It never touches http.Request.
 package service
 
 import (
@@ -8,29 +8,29 @@ import (
 	"github.com/newhand31/go-shop/internal/repository"
 )
 
-// ProductStore 是 service 需要的資料存取，由使用端（這裡）定義，只列用到的方法。
+// ProductStore is the data access the service needs, defined by the consumer (here) and listing only the methods it uses.
 type ProductStore interface {
 	List(ctx context.Context) ([]repository.Product, error)
 }
 
-// Product 是 service 對外的商品型別，handler 只認這個。
+// Product is the product type the service exposes; the handler only knows this one.
 type Product struct {
 	ID       int
 	Name     string
 	PriceTWD int
 }
 
-// ProductService 負責商品相關業務。
+// ProductService handles product business logic.
 type ProductService struct {
 	store ProductStore
 }
 
-// NewProductService 由 main 手動注入 store。
+// NewProductService gets its store injected by hand in main.
 func NewProductService(store ProductStore) *ProductService {
 	return &ProductService{store: store}
 }
 
-// List 回傳所有商品。
+// List returns all products.
 func (s *ProductService) List(ctx context.Context) ([]Product, error) {
 	rows, err := s.store.List(ctx)
 	if err != nil {
