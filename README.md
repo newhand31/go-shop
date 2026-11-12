@@ -8,11 +8,23 @@ Companion repo for a YouTube series: **building a production-style e-commerce ba
 - **One tag per episode.** `git checkout ep01` … `ep12`, plus `ep13-pitfalls`. Tags never move.
 - **Stack.** `net/http` + chi, PostgreSQL (pgx + sqlc + goose), Redis, outbox + NATS, OpenTelemetry, testcontainers-go, k6, Docker → Azure Container Apps.
 
+Run it locally (needs Go and Docker). Since episode 2 products live in PostgreSQL; the API applies migrations on startup.
+
 ```bash
-go run ./cmd/api
-curl http://localhost:8080/healthz
-go test ./...
+docker compose up -d --wait
+DATABASE_URL="postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable" go run ./cmd/api
+curl http://localhost:8080/products
 ```
+
+PowerShell: `$env:DATABASE_URL = "postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable"; go run ./cmd/api`.
+Port 5432 already taken? Start with `POSTGRES_PORT=55432` and use that port in `DATABASE_URL`. The credentials are local throwaway defaults.
+
+```bash
+go test ./...                       # unit tests, no Docker
+go test -tags=integration ./...     # integration tests, starts PostgreSQL via testcontainers (needs Docker)
+```
+
+After editing `db/queries/*.sql`, regenerate the repository code with `make sqlc` (runs sqlc in Docker).
 
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
@@ -68,12 +80,21 @@ Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([d
 
 ## 執行
 
+需要 Go 和 Docker。第 2 集起商品存在 PostgreSQL，API 啟動時會自動跑 migration。
+
 ```bash
-go run ./cmd/api
+docker compose up -d --wait
 ```
 
 ```bash
-curl http://localhost:8080/healthz
+DATABASE_URL="postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable" go run ./cmd/api
+```
+
+PowerShell：`$env:DATABASE_URL = "postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable"; go run ./cmd/api`。
+5432 被佔用了？用 `POSTGRES_PORT=55432` 起 compose，`DATABASE_URL` 也改成同一個 port。帳密是本機用的預設值，不是密鑰。
+
+```bash
+curl http://localhost:8080/products
 ```
 
 測試：
@@ -81,3 +102,11 @@ curl http://localhost:8080/healthz
 ```bash
 go test ./...
 ```
+
+整合測試（用 testcontainers 起一個 PostgreSQL，需要 Docker）：
+
+```bash
+go test -tags=integration ./...
+```
+
+改了 `db/queries/*.sql` 之後，用 `make sqlc` 重新產生 repository 程式碼（sqlc 在 Docker 裡跑）。
