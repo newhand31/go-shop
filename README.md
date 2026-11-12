@@ -26,13 +26,22 @@ go test -tags=integration ./...     # integration tests, starts PostgreSQL via t
 
 After editing `db/queries/*.sql`, regenerate the repository code with `make sqlc` (runs sqlc in Docker).
 
-The HTTP contract lives in `api/openapi.yaml`; after editing it, regenerate `internal/api/api.gen.go` with `make api` (oapi-codegen, pinned version). Every error the API returns has one shape: `{"code", "message", "field"?}` (a panic is not handled yet; that comes with middleware in episode 4).
+The HTTP contract lives in `api/openapi.yaml`; after editing it, regenerate `internal/api/api.gen.go` with `make api` (oapi-codegen, pinned version). Every error the API returns has one shape: `{"code", "message", "field"?}` (a panic is turned into the same shape by the `Recover` middleware, episode 4).
 
 ```bash
 curl http://localhost:8080/products/1      # one product
 curl http://localhost:8080/products/999    # 404 {"code":"product_not_found",...}
 curl http://localhost:8080/products/abc    # 400 {"code":"invalid_request","field":"id",...}
 ```
+
+Since episode 4 every request goes through a middleware chain: request log → panic recovery → rate limit (per client IP, 10 requests/s, burst 20) → session cookie. Flood it and watch the `429`:
+
+```bash
+curl -i http://localhost:8080/products     # Set-Cookie: sid=...
+for i in $(seq 1 40); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/products; done   # 200 ... then 429
+```
+
+The proof is a test, not a promise: `go test -tags=integration ./internal/handler` sends 1000 requests from one IP to a real server.
 
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
@@ -119,10 +128,19 @@ go test -tags=integration ./...
 
 改了 `db/queries/*.sql` 之後，用 `make sqlc` 重新產生 repository 程式碼（sqlc 在 Docker 裡跑）。
 
-HTTP 契約寫在 `api/openapi.yaml`；改完用 `make api` 重新產生 `internal/api/api.gen.go`（oapi-codegen，版本固定）。API 回傳的所有錯誤都是同一個形狀：`{"code", "message", "field"?}`（panic 還沒處理，留到第 4 集的 middleware）。
+HTTP 契約寫在 `api/openapi.yaml`；改完用 `make api` 重新產生 `internal/api/api.gen.go`（oapi-codegen，版本固定）。API 回傳的所有錯誤都是同一個形狀：`{"code", "message", "field"?}`（panic 由第 4 集的 `Recover` middleware 轉成同樣的形狀）。
 
 ```bash
 curl http://localhost:8080/products/1      # 一件商品
 curl http://localhost:8080/products/999    # 404 {"code":"product_not_found",...}
 curl http://localhost:8080/products/abc    # 400 {"code":"invalid_request","field":"id",...}
 ```
+
+第 4 集起每個請求都會經過 middleware 鏈：請求紀錄 → panic 復原 → 限流（每個來源 IP 每秒 10 次、突發 20）→ session cookie。狂打看看 `429`：
+
+```bash
+curl -i http://localhost:8080/products     # Set-Cookie: sid=...
+for i in $(seq 1 40); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/products; done   # 200 … 之後 429
+```
+
+證明是測試不是口號：`go test -tags=integration ./internal/handler` 從同一個 IP 對真的 server 打 1000 次。

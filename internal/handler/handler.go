@@ -54,10 +54,12 @@ func toAPI(p service.Product) api.Product {
 	return api.Product{Id: p.ID, Name: p.Name, PriceTwd: p.PriceTWD}
 }
 
-// New builds the router. A middleware is just func(http.Handler) http.Handler.
-func New(products Products, logger *slog.Logger) http.Handler {
+// New builds the router. The chain runs top to bottom: RequestLog, then Recover (so a panic still gets a logged 500),
+// then any extra middleware the caller passes (rate limit, session), then the route itself.
+func New(products Products, logger *slog.Logger, middleware ...func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
-	r.Use(RequestLog(logger))
+	r.Use(RequestLog(logger), Recover(logger))
+	r.Use(middleware...)
 	r.NotFound(notFound(logger))
 	r.MethodNotAllowed(methodNotAllowed(logger))
 
