@@ -1,7 +1,12 @@
-// Package repository is the data access layer. Episode 1 uses hard-coded in-memory data; episode 2 switches to PostgreSQL.
+// Package repository is the data access layer: sqlc-generated queries plus a thin wrapper. No business rules here.
 package repository
 
-import "context"
+import (
+	"context"
+	"fmt"
+
+	"github.com/newhand31/go-shop/internal/repository/dbgen"
+)
 
 // Product is the concrete type the repository returns.
 type Product struct {
@@ -10,23 +15,25 @@ type Product struct {
 	PriceTWD int
 }
 
-// MemoryProducts keeps products hard-coded in memory.
-type MemoryProducts struct {
-	items []Product
+// Products reads products from PostgreSQL through sqlc-generated code.
+type Products struct {
+	q *dbgen.Queries
 }
 
-// NewMemoryProducts creates a repository with three built-in products.
-func NewMemoryProducts() *MemoryProducts {
-	return &MemoryProducts{items: []Product{
-		{ID: 1, Name: "機械式鍵盤", PriceTWD: 2490},
-		{ID: 2, Name: "人體工學滑鼠", PriceTWD: 1290},
-		{ID: 3, Name: "27 吋螢幕", PriceTWD: 5990},
-	}}
+// NewProducts takes anything sqlc can run queries on: a *pgxpool.Pool today, a pgx.Tx when transactions arrive.
+func NewProducts(conn dbgen.DBTX) *Products {
+	return &Products{q: dbgen.New(conn)}
 }
 
-// List returns a copy of all products, so callers cannot change the internal data.
-func (r *MemoryProducts) List(_ context.Context) ([]Product, error) {
-	out := make([]Product, len(r.items))
-	copy(out, r.items)
+// List returns all products ordered by id.
+func (r *Products) List(ctx context.Context) ([]Product, error) {
+	rows, err := r.q.ListProducts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query products: %w", err)
+	}
+	out := make([]Product, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, Product{ID: int(row.ID), Name: row.Name, PriceTWD: int(row.PriceTwd)})
+	}
 	return out, nil
 }
