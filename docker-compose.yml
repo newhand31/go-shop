@@ -1,0 +1,20 @@
+# Local development only. The credentials below are throwaway defaults, not secrets.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: goshop
+      POSTGRES_PASSWORD: goshop
+      POSTGRES_DB: goshop
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U goshop -d goshop"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:
