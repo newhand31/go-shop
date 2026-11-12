@@ -26,7 +26,7 @@ go test -tags=integration ./...     # integration tests, starts PostgreSQL via t
 
 After editing `db/queries/*.sql`, regenerate the repository code with `make sqlc` (runs sqlc in Docker).
 
-The HTTP contract lives in `api/openapi.yaml`; after editing it, regenerate `internal/api/api.gen.go` with `make api` (oapi-codegen, pinned version). Every error response has one shape: `{"code", "message", "field"?}`.
+The HTTP contract lives in `api/openapi.yaml`; after editing it, regenerate `internal/api/api.gen.go` with `make api` (oapi-codegen, pinned version). Every error the API returns has one shape: `{"code", "message", "field"?}` (a panic is not handled yet; that comes with middleware in episode 4).
 
 ```bash
 curl http://localhost:8080/products/1      # one product
@@ -119,7 +119,7 @@ go test -tags=integration ./...
 
 改了 `db/queries/*.sql` 之後，用 `make sqlc` 重新產生 repository 程式碼（sqlc 在 Docker 裡跑）。
 
-HTTP 契約寫在 `api/openapi.yaml`；改完用 `make api` 重新產生 `internal/api/api.gen.go`（oapi-codegen，版本固定）。所有錯誤回應都是同一個形狀：`{"code", "message", "field"?}`。
+HTTP 契約寫在 `api/openapi.yaml`；改完用 `make api` 重新產生 `internal/api/api.gen.go`（oapi-codegen，版本固定）。API 回傳的所有錯誤都是同一個形狀：`{"code", "message", "field"?}`（panic 還沒處理，留到第 4 集的 middleware）。
 
 ```bash
 curl http://localhost:8080/products/1      # 一件商品

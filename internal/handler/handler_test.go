@@ -107,6 +107,9 @@ func TestErrorResponsesShareOneShape(t *testing.T) {
 			if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 				t.Fatalf("Content-Type = %q, want application/json", ct)
 			}
+			if tt.wantStatus == http.StatusMethodNotAllowed && rec.Header().Get("Allow") != "GET" {
+				t.Errorf("Allow = %q, want GET", rec.Header().Get("Allow"))
+			}
 			dec := json.NewDecoder(rec.Body)
 			dec.DisallowUnknownFields() // no extra keys: the shape is exactly api.Error
 			var got api.Error
