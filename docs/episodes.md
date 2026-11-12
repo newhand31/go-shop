@@ -14,7 +14,7 @@
 | 04 | **有人亂打 API**：同一個 IP 一秒打一千次 | middleware 鏈、session、限流 | ＊middleware 就是函式包函式，取代 ActionFilter／Servlet Filter |
 | 05 | **購物車不見**：換一台機器購物車就空了 | Redis、隱式 interface（使用端定義） | ＊不用寫 `: IRepository`／`implements`，方法對上就滿足 |
 | 06 | **超賣**：庫存 1 件賣出 3 件，用 k6 重現 | DB 交易、`SELECT ... FOR UPDATE`、`defer tx.Rollback` | 沒有 `[Transactional]`／`TransactionScope`：交易邊界自己寫 |
-| 07 | **付兩次錢**：綠界回呼重送，訂單入帳兩次 | import `twpayhook` 處理綠界回呼、冪等鍵 | ＊沒有 middleware 魔法幫你去重，冪等鍵自己存 |
+| 07 | **付兩次錢**：綠界回呼重送，訂單入帳兩次 | 自寫綠界回呼驗章（`crypto/sha256`、`net/url`）、冪等鍵 | ＊沒有 middleware 魔法幫你去重，冪等鍵自己存 |
 | 08 | **信沒寄出**：下單成功但確認信沒寄 | outbox pattern、goroutine | 不是 async/await：goroutine 不回傳 Task，要自己管生命週期 |
 | 09 | **庫存被佔**：沒付款的訂單一直佔著庫存 | 排程（`time.Ticker`）、`context.WithTimeout` 逾時取消 | ＊context 取代 `CancellationToken`，但還帶 deadline 與值 |
 | 10 | **雙 11 打爆 DB**：搶購瞬間 DB 連線池耗盡 | Redis 預扣、channel 與背壓 | ＊channel 對照 `System.Threading.Channels`／`BlockingQueue` |

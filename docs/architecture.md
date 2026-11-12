@@ -17,7 +17,7 @@
 | API 契約 | OpenAPI + oapi-codegen | 03 | 契約先行，產生 server interface 與型別 |
 | Session／購物車／限流 | Redis | 04–05 | 跨實例共享狀態 |
 | 交易與鎖 | Postgres 交易、`SELECT ... FOR UPDATE` | 06 | 防超賣；對照 `[Transactional]`／`TransactionScope` |
-| 金流 | `github.com/newhand31/twpayhook`（綠界回呼） | 07 | 只 import 不改；冪等鍵防重複入帳 |
+| 金流 | 自寫綠界回呼（`internal/payment/ecpay`：CheckMacValue 驗章、解析） | 07 | 冪等鍵防重複入帳 |
 | 非同步 | outbox 表 + NATS（或 RabbitMQ）+ worker | 08 | 與業務交易同一個 DB 交易寫入，保證至少一次送達 |
 | 排程與逾時 | `time.Ticker`、`context.WithTimeout` | 09 | 釋放逾時未付款的保留庫存 |
 | 高併發搶購 | Redis 預扣 + channel 背壓 | 10 | 擋住 DB 前的流量 |

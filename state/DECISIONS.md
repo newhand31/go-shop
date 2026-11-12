@@ -7,6 +7,9 @@
 
 <!-- entries below, newest first -->
 
+## [2026-11-13] 金流：go-shop 自寫綠界回呼，不 import twpayhook
+選：第 7 集在 go-shop 內自寫綠界回呼驗章與解析（internal/payment/ecpay），當教學內容。否決：import twpayhook（使用者的私人學習 repo，維持不公開；公開 repo 依賴私人模組，觀眾無法建置）。因為：使用者 2026-11-13 拍板「twpayhook不公開，go-shop寫自己邏輯來教學」。
+
 ## [2026-11-12] repo 轉公開，程式碼與 commit 英文化
 - 選了: 公開 newhand31/go-shop；首次公開前重建歷史（作者改 noreply、風格指南去掉點名）；程式碼 MIT、docs/ CC BY-NC 4.0；識別字、註解、commit 英文，README 中英雙語
 - 否決: 在原 repo 改寫歷史後直接轉公開：舊 PR 的 force-push 紀錄會留下舊 sha，公開後仍看得到舊樹
