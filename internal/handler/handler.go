@@ -3,54 +3,74 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/newhand31/go-shop/internal/api"
 	"github.com/newhand31/go-shop/internal/service"
 )
 
-// ProductLister is the service capability the handler needs, defined by the consumer.
-type ProductLister interface {
+// Products is the service capability the handler needs, defined by the consumer.
+type Products interface {
 	List(ctx context.Context) ([]service.Product, error)
+	Get(ctx context.Context, id int) (service.Product, error)
 }
 
-type productJSON struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	PriceTWD int    `json:"price_twd"`
+// server implements api.ServerInterface, the interface oapi-codegen generated from api/openapi.yaml.
+// If the spec adds an operation and this type lacks the method, the build fails: the contract is enforced by the compiler.
+type server struct {
+	products Products
+	logger   *slog.Logger
+}
+
+var _ api.ServerInterface = (*server)(nil)
+
+func (s *server) ListProducts(w http.ResponseWriter, r *http.Request) {
+	items, err := s.products.List(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	out := make([]api.Product, 0, len(items))
+	for _, p := range items {
+		out = append(out, toAPI(p))
+	}
+	writeJSON(w, s.logger, http.StatusOK, out)
+}
+
+func (s *server) GetProduct(w http.ResponseWriter, r *http.Request, id int) {
+	p, err := s.products.Get(r.Context(), id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, toAPI(p))
+}
+
+func toAPI(p service.Product) api.Product {
+	return api.Product{Id: p.ID, Name: p.Name, PriceTwd: p.PriceTWD}
 }
 
 // New builds the router. A middleware is just func(http.Handler) http.Handler.
-func New(products ProductLister, logger *slog.Logger) http.Handler {
+func New(products Products, logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 	r.Use(RequestLog(logger))
+	r.NotFound(notFound(logger))
+	r.MethodNotAllowed(methodNotAllowed(logger))
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	r.Get("/products", func(w http.ResponseWriter, req *http.Request) {
-		items, err := products.List(req.Context())
-		if err != nil {
-			logger.Error("list products failed", "err", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		out := make([]productJSON, 0, len(items))
-		for _, p := range items {
-			out = append(out, productJSON{ID: p.ID, Name: p.Name, PriceTWD: p.PriceTWD})
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		if err := json.NewEncoder(w).Encode(out); err != nil {
-			logger.Error("write response failed", "err", err)
-		}
+	return api.HandlerWithOptions(&server{products: products, logger: logger}, api.ChiServerOptions{
+		BaseRouter: r,
+		// Path/param binding errors happen inside generated code; send them through the same writeError.
+		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) { writeError(w, logger, err) },
 	})
-	return r
 }
 
 type statusRecorder struct {

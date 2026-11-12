@@ -30,6 +30,24 @@ func NewProductService(store ProductStore) *ProductService {
 	return &ProductService{store: store}
 }
 
+// Get returns one product. A bad id is a *ValidationError, an unknown id wraps ErrProductNotFound.
+func (s *ProductService) Get(ctx context.Context, id int) (Product, error) {
+	if id <= 0 {
+		return Product{}, &ValidationError{Field: "id", Message: "must be a positive integer"}
+	}
+	// ProductStore only has List for now; a single-row query can replace this scan when the catalog grows.
+	all, err := s.List(ctx)
+	if err != nil {
+		return Product{}, fmt.Errorf("get product %d: %w", id, err)
+	}
+	for _, p := range all {
+		if p.ID == id {
+			return p, nil
+		}
+	}
+	return Product{}, fmt.Errorf("get product %d: %w", id, ErrProductNotFound)
+}
+
 // List returns all products.
 func (s *ProductService) List(ctx context.Context) ([]Product, error) {
 	rows, err := s.store.List(ctx)
