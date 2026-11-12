@@ -1,5 +1,25 @@
 # go-shop｜用 Go 寫實戰購物網站
 
+**English** · [繁體中文](#繁體中文)
+
+Companion repo for a YouTube series: **building a production-style e-commerce backend in Go**, aimed at C#/Java backend engineers moving to Go.
+
+- **Incident-driven.** Every episode starts from a production incident (overselling, double payment, lost emails, a Black-Friday-style rush), introduces one Go concept to fix it, and proves the fix with a test or a load test.
+- **One tag per episode.** `git checkout ep01` … `ep12`, plus `ep13-pitfalls`. Tags never move.
+- **Stack.** `net/http` + chi, PostgreSQL (pgx + sqlc + goose), Redis, outbox + NATS, OpenTelemetry, testcontainers-go, k6, Docker → Azure Container Apps.
+
+```bash
+go run ./cmd/api
+curl http://localhost:8080/healthz
+go test ./...
+```
+
+Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
+
+---
+
+## 繁體中文
+
 繁中 YouTube 教學系列的配套 repo。每集對應一個 git tag（`ep01`…`ep12`、`ep13-pitfalls`），觀眾可以 checkout 到該集的程式碼。
 
 ## 定位

@@ -44,6 +44,14 @@
 - 文案、腳本照 `docs/style-guide.md`。笑點只對著程式、事故、自己，不對著人。
 - 金流 import `github.com/newhand31/twpayhook`，本 repo 只 import 不改它（那是使用者的學習 repo）。
 
+## 公開 repo 與語言
+
+- 本 repo 是公開的。不放密鑰、個人資料、本機路徑；不點名評論真人或其他創作者。
+- 程式碼識別字、註解、測試案例名、commit 訊息一律英文（觀眾含英語市場）。
+- README 中英雙語；改一邊要同步另一邊。
+- 腳本按語言分：中文 `docs/scripts/epNN.md`，英文 `docs/scripts/en/epNN.md`。英文腳本照 `docs/style-guide.md` §6 重寫笑點，不直譯。
+- 授權：程式碼 MIT（`LICENSE`），`docs/` 為 CC BY-NC 4.0（`docs/LICENSE.md`）。
+
 ## 決策紀錄
 
 `state/` 由 state-ledger 管理。`state/DECISIONS.md` 是產生的檢視檔，不要手改；新增用 `~/.claude/skills/state-ledger/state-ledger.ps1 add`。

@@ -7,6 +7,12 @@
 
 <!-- entries below, newest first -->
 
+## [2026-11-12] repo 轉公開，程式碼與 commit 英文化
+- 選了: 公開 newhand31/go-shop；首次公開前重建歷史（作者改 noreply、風格指南去掉點名）；程式碼 MIT、docs/ CC BY-NC 4.0；識別字、註解、commit 英文，README 中英雙語
+- 否決: 在原 repo 改寫歷史後直接轉公開：舊 PR 的 force-push 紀錄會留下舊 sha，公開後仍看得到舊樹
+- 因為: repo 是觀眾的入口兼作品集；英語市場要看得懂程式碼；docs 用 NC 防止教材被拿去賣
+- refs: LICENSE, docs/LICENSE.md, CLAUDE.md
+
 ## [2026-11-11] 文案風格：搬節目結構與手法，不搬笑點內容
 - 選了: 參考財經晨間節目的結構與手法：時間錨點開場、荒謬自貶、降級排比、自拆偽邏輯、寓言收束、反問、三點收尾
 - 否決: 照搬參考節目的笑點內容：性暗示、政治、刻板印象、真人八卦
