@@ -22,6 +22,17 @@ type OrderLine struct {
 	UnitPriceTwd int32
 }
 
+type Outbox struct {
+	ID            int64
+	Topic         string
+	Payload       []byte
+	Attempts      int32
+	NextAttemptAt pgtype.Timestamptz
+	SentAt        pgtype.Timestamptz
+	LastError     pgtype.Text
+	CreatedAt     pgtype.Timestamptz
+}
+
 type Payment struct {
 	ID        int64
 	OrderID   int64
