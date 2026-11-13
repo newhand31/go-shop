@@ -42,7 +42,7 @@
 
 - 每集只引入一個主要 Go 概念。程式碼要服務該集的事故劇情，不要提前用到後面集數的技術。
 - 文案、腳本照 `docs/style-guide.md`。笑點只對著程式、事故、自己，不對著人。
-- 金流 import `github.com/newhand31/twpayhook`，本 repo 只 import 不改它（那是使用者的學習 repo）。
+- 金流：綠界回呼的驗章與解析在本 repo 自己寫（`internal/payment/ecpay`），當教學內容；不 import 外部金流套件。
 
 ## 公開 repo 與語言
 
