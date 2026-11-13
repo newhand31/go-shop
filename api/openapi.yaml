@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: go-shop API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     Contract-first: this file is the single source of truth for the HTTP API.
     Run `make api` to regenerate internal/api/api.gen.go.
@@ -97,6 +97,25 @@ paths:
                 $ref: "#/components/schemas/Cart"
         default:
           $ref: "#/components/responses/Error"
+  /checkout:
+    post:
+      operationId: checkout
+      summary: Buy everything in the cart. Stock is checked and taken in one transaction, so it cannot be oversold.
+      responses:
+        "201":
+          description: The placed order; the cart is now empty
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "409":
+          description: Not enough stock for at least one line; nothing was bought and the cart is unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/Error"
 components:
   responses:
     Error:
@@ -144,6 +163,28 @@ components:
             $ref: "#/components/schemas/CartItem"
         total_twd:
           type: integer
+    OrderLine:
+      type: object
+      required: [product_id, quantity, unit_price_twd]
+      properties:
+        product_id:
+          type: integer
+        quantity:
+          type: integer
+        unit_price_twd:
+          type: integer
+    Order:
+      type: object
+      required: [id, total_twd, lines]
+      properties:
+        id:
+          type: integer
+        total_twd:
+          type: integer
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
     Error:
       type: object
       required: [code, message]

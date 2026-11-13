@@ -52,6 +52,21 @@ curl -c jar -b jar http://localhost:8080/cart                                   
 
 The proof is `go test -tags=integration ./internal/handler`: two API instances behind one cookie jar. With in-process memory the cart vanishes when the "load balancer" switches instance; with Redis it survives.
 
+Since episode 6 `POST /checkout` turns the cart into an order. Stock is checked and taken inside one database transaction with `SELECT ... FOR UPDATE`, so the last monitor can only be sold once (the seed data has exactly one):
+
+```bash
+curl -c jar -b jar -X PUT -d '{"quantity":1}' http://localhost:8080/cart/items/3
+curl -c jar -b jar -X POST http://localhost:8080/checkout    # 201 the first time, 409 {"code":"out_of_stock"} for everyone after
+```
+
+The proof is `go test -tags=integration ./internal/repository`: 20 buyers, 1 monitor. Without the lock more than one buyer is told "yours"; with it exactly one. To watch it on the real server with [k6](https://k6.io), raise the rate limit for the run (a load test comes from one IP), reset the stock, and fire 50 simultaneous buyers:
+
+```bash
+RATE_LIMIT_RPS=100000 RATE_LIMIT_BURST=100000 DATABASE_URL=... REDIS_URL=... go run ./cmd/api
+docker compose exec postgres psql -U goshop -c "UPDATE products SET stock = 1 WHERE id = 3"
+k6 run scripts/k6/oversell.js     # exactly 1 order, 49 times 409
+```
+
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
 ---
@@ -162,3 +177,18 @@ curl -c jar -b jar http://localhost:8080/cart                                   
 ```
 
 證明是 `go test -tags=integration ./internal/handler`：兩台 API 共用一個 cookie jar。狀態放在行程記憶體，「負載平衡器」一換台購物車就空了；放在 Redis 就不會。
+
+第 6 集起 `POST /checkout` 把購物車變成訂單。檢查庫存與扣庫存發生在同一個資料庫交易裡，用 `SELECT ... FOR UPDATE` 鎖住商品那一列，所以最後一台螢幕只賣得出去一次（種子資料正好只有一台）：
+
+```bash
+curl -c jar -b jar -X PUT -d '{"quantity":1}' http://localhost:8080/cart/items/3
+curl -c jar -b jar -X POST http://localhost:8080/checkout    # 第一次 201，之後每個人都是 409 {"code":"out_of_stock"}
+```
+
+證明是 `go test -tags=integration ./internal/repository`：20 個買家搶 1 台螢幕。沒有鎖，不只一個買家被告知「是你的」；有鎖，剛好一個。想用 [k6](https://k6.io) 在真的 server 上看：先把限流調高（壓測都從同一個 IP 來）、把庫存放回 1，再同時送出 50 個買家：
+
+```bash
+RATE_LIMIT_RPS=100000 RATE_LIMIT_BURST=100000 DATABASE_URL=... REDIS_URL=... go run ./cmd/api
+docker compose exec postgres psql -U goshop -c "UPDATE products SET stock = 1 WHERE id = 3"
+k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
+```

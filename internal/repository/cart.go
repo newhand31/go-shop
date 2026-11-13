@@ -9,7 +9,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// cartTTL is how long an untouched cart survives. Every write pushes it forward again.
+// cartTTL is how long an untouched cart survives. Adding or changing a line pushes it forward again (removing one does not).
 const cartTTL = 7 * 24 * time.Hour
 
 // Carts keeps one Redis hash per cart: key "cart:<id>", field = product id, value = quantity.

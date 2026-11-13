@@ -44,6 +44,20 @@ type Error struct {
 	Message string `json:"message"`
 }
 
+// Order defines model for Order.
+type Order struct {
+	Id       int         `json:"id"`
+	Lines    []OrderLine `json:"lines"`
+	TotalTwd int         `json:"total_twd"`
+}
+
+// OrderLine defines model for OrderLine.
+type OrderLine struct {
+	ProductId    int `json:"product_id"`
+	Quantity     int `json:"quantity"`
+	UnitPriceTwd int `json:"unit_price_twd"`
+}
+
 // Product defines model for Product.
 type Product struct {
 	Id       int    `json:"id"`
@@ -65,6 +79,9 @@ type ServerInterface interface {
 	// PutCartItem Set how many of a product are in the cart (1 to 99)
 	// (PUT /cart/items/{productId})
 	PutCartItem(w http.ResponseWriter, r *http.Request, productId int)
+	// Checkout Buy everything in the cart. Stock is checked and taken in one transaction, so it cannot be oversold.
+	// (POST /checkout)
+	Checkout(w http.ResponseWriter, r *http.Request)
 	// ListProducts List all products
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request)
@@ -92,6 +109,12 @@ func (_ Unimplemented) DeleteCartItem(w http.ResponseWriter, r *http.Request, pr
 // PutCartItem Set how many of a product are in the cart (1 to 99)
 // (PUT /cart/items/{productId})
 func (_ Unimplemented) PutCartItem(w http.ResponseWriter, r *http.Request, productId int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Checkout Buy everything in the cart. Stock is checked and taken in one transaction, so it cannot be oversold.
+// (POST /checkout)
+func (_ Unimplemented) Checkout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -173,6 +196,20 @@ func (siw *ServerInterfaceWrapper) PutCartItem(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PutCartItem(w, r, productId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Checkout operation middleware
+func (siw *ServerInterfaceWrapper) Checkout(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Checkout(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -349,6 +386,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/cart/items/{productId}", wrapper.PutCartItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/checkout", wrapper.Checkout)
 	})
 
 	return r

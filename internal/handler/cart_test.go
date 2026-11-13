@@ -81,7 +81,7 @@ func TestCartRoutes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
-			New(fakeProducts{}, tt.carts, quietLogger(), withSession("s1")).ServeHTTP(rec, req)
+			New(fakeProducts{}, tt.carts, fakeOrders{}, quietLogger(), withSession("s1")).ServeHTTP(rec, req)
 
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d; body %s", rec.Code, tt.wantStatus, rec.Body)
@@ -112,7 +112,7 @@ func TestCartUsesSessionIDAsCartID(t *testing.T) {
 	carts := fakeCarts{gotID: &gotID, gotQty: &gotQty}
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/cart/items/1", strings.NewReader(`{"quantity":7}`))
-	New(fakeProducts{}, carts, quietLogger(), withSession("session-42")).ServeHTTP(rec, req)
+	New(fakeProducts{}, carts, fakeOrders{}, quietLogger(), withSession("session-42")).ServeHTTP(rec, req)
 
 	if gotID != "session-42" || gotQty != 7 {
 		t.Fatalf("service got cart id %q quantity %d, want session-42 and 7", gotID, gotQty)
@@ -122,7 +122,7 @@ func TestCartUsesSessionIDAsCartID(t *testing.T) {
 // Without the Session middleware there is no cart id. That is a wiring bug: 500, never a shared "" cart.
 func TestCartWithoutSessionIsAServerError(t *testing.T) {
 	rec := httptest.NewRecorder()
-	New(fakeProducts{}, fakeCarts{}, quietLogger()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cart", nil))
+	New(fakeProducts{}, fakeCarts{}, fakeOrders{}, quietLogger()).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/cart", nil))
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
 	}

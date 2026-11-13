@@ -39,6 +39,8 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	switch {
 	case errors.Is(err, service.ErrProductNotFound):
 		status, body = http.StatusNotFound, api.Error{Code: "product_not_found", Message: "product not found"}
+	case errors.Is(err, service.ErrOutOfStock):
+		status, body = http.StatusConflict, api.Error{Code: "out_of_stock", Message: "not enough stock"}
 	case errors.As(err, &validation):
 		status, body = http.StatusBadRequest, api.Error{Code: "invalid_request", Message: validation.Message, Field: &validation.Field}
 	case errors.As(err, &badParam):

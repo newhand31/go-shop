@@ -24,6 +24,7 @@ type Products interface {
 type server struct {
 	products Products
 	carts    Carts
+	orders   Orders
 	logger   *slog.Logger
 }
 
@@ -57,7 +58,7 @@ func toAPI(p service.Product) api.Product {
 
 // New builds the router. The chain runs top to bottom: RequestLog, then Recover (so a panic still gets a logged 500),
 // then any extra middleware the caller passes (rate limit, session), then the route itself.
-func New(products Products, carts Carts, logger *slog.Logger, middleware ...func(http.Handler) http.Handler) http.Handler {
+func New(products Products, carts Carts, orders Orders, logger *slog.Logger, middleware ...func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(RequestLog(logger), Recover(logger))
 	r.Use(middleware...)
@@ -69,7 +70,7 @@ func New(products Products, carts Carts, logger *slog.Logger, middleware ...func
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	return api.HandlerWithOptions(&server{products: products, carts: carts, logger: logger}, api.ChiServerOptions{
+	return api.HandlerWithOptions(&server{products: products, carts: carts, orders: orders, logger: logger}, api.ChiServerOptions{
 		BaseRouter: r,
 		// Path/param binding errors happen inside generated code; send them through the same writeError.
 		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) { writeError(w, logger, err) },
