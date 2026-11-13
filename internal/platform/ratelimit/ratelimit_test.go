@@ -37,22 +37,22 @@ func TestAllow(t *testing.T) {
 			want: 3,
 		},
 		{
-			name: "tokens refill over time", rate: 2, burst: 2,
+			name: "tokens refill over time", rate: 2, burst: 4, // idle sweep after 2s, so 1s keeps the bucket
 			run: func(c *fakeClock, l *Limiter) int {
-				n := countAllowed(l, "a", 5) // drain: 2 allowed
-				c.advance(time.Second)       // 2 tokens back
-				return n + countAllowed(l, "a", 5)
+				n := countAllowed(l, "a", 10) // drain: 4 allowed
+				c.advance(time.Second)        // 2 tokens back
+				return n + countAllowed(l, "a", 10)
 			},
-			want: 4,
+			want: 6,
 		},
 		{
-			name: "refill never exceeds burst", rate: 100, burst: 2,
+			name: "refill never exceeds burst", rate: 10, burst: 5, // idle sweep after 500ms, so 400ms keeps the bucket
 			run: func(c *fakeClock, l *Limiter) int {
-				l.Allow("a")
-				c.advance(time.Hour)
+				l.Allow("a")                      // 4 tokens left
+				c.advance(400 * time.Millisecond) // +4 would make 8 without the clamp
 				return countAllowed(l, "a", 10)
 			},
-			want: 2,
+			want: 5,
 		},
 		{
 			name: "keys are independent", rate: 1, burst: 1,
