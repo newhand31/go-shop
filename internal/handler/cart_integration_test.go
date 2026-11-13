@@ -91,7 +91,7 @@ func newAPI(t *testing.T, sessions handler.SessionStore, carts service.CartStore
 	t.Helper()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	ttl := time.Hour
-	h := handler.New(oneProduct{}, service.NewCartService(carts, catalog{}), logger,
+	h := handler.New(oneProduct{}, service.NewCartService(carts, catalog{}), noOrders{}, logger,
 		handler.RateLimit(ratelimit.New(1000, 1000), logger),
 		handler.Session(sessions, ttl, logger),
 	)
@@ -189,7 +189,7 @@ func TestCartSurvivesSwitchingMachinesWithRedis(t *testing.T) {
 	}
 }
 
-// Carts and sessions both expire in Redis, and every write or use pushes the expiry forward.
+// Carts and sessions both expire in Redis: using a session or writing to a cart pushes the expiry forward.
 func TestRedisExpiry(t *testing.T) {
 	ctx := context.Background()
 	rdb, err := redis.Open(ctx, startRedisURL(t))

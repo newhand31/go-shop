@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/newhand31/go-shop/internal/handler"
@@ -23,17 +24,28 @@ import (
 )
 
 // Per client IP: 10 requests a second on average, bursts up to 20. A shop page makes a handful of calls, a script makes thousands.
+// A load test comes from one IP, so RATE_LIMIT_RPS and RATE_LIMIT_BURST can raise these for that run (never in production).
 const (
-	rateLimitPerSecond = 10
-	rateLimitBurst     = 20
-	sessionTTL         = 24 * time.Hour
+	defaultRateLimitPerSecond = 10
+	defaultRateLimitBurst     = 20
+	sessionTTL                = 24 * time.Hour
 )
+
+// envInt reads a positive integer from the environment, or returns def when it is unset or invalid.
+func envInt(name string, def int) int {
+	if n, err := strconv.Atoi(os.Getenv(name)); err == nil && n > 0 {
+		return n
+	}
+	return def
+}
 
 // Implicit interfaces, checked where the pieces meet. Nobody wrote "implements": these lines only ask the compiler
 // whether the methods fit. Delete a method from session.Redis or repository.Carts and the build fails here.
 var (
 	_ handler.SessionStore = (*session.Redis)(nil)
 	_ service.CartStore    = (*repository.Carts)(nil)
+	_ service.CheckoutCart = (*repository.Carts)(nil)
+	_ service.OrderStore   = (*repository.Orders)(nil)
 )
 
 func main() {
@@ -83,10 +95,11 @@ func run(logger *slog.Logger) error {
 	repo := repository.NewProducts(pool)
 	svc := service.NewProductService(repo)
 	// Middleware order matters: the rate limiter sits before the session store, so a flood never gets to create sessions.
-	limiter := ratelimit.New(rateLimitPerSecond, rateLimitBurst)
+	limiter := ratelimit.New(float64(envInt("RATE_LIMIT_RPS", defaultRateLimitPerSecond)), envInt("RATE_LIMIT_BURST", defaultRateLimitBurst))
 	sessions := session.NewRedis(rdb, sessionTTL) // was session.NewMemory in episode 4: the handler cannot tell
 	carts := service.NewCartService(repository.NewCarts(rdb), svc)
-	h := handler.New(svc, carts, logger,
+	orders := service.NewOrderService(repository.NewOrders(pool), repository.NewCarts(rdb), logger)
+	h := handler.New(svc, carts, orders, logger,
 		handler.RateLimit(limiter, logger),
 		handler.Session(sessions, sessionTTL, logger),
 	)

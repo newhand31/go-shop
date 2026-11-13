@@ -9,6 +9,20 @@ import (
 	"context"
 )
 
+const decreaseStock = `-- name: DecreaseStock :exec
+UPDATE products SET stock = stock - $2 WHERE id = $1
+`
+
+type DecreaseStockParams struct {
+	ID    int32
+	Stock int32
+}
+
+func (q *Queries) DecreaseStock(ctx context.Context, arg DecreaseStockParams) error {
+	_, err := q.db.Exec(ctx, decreaseStock, arg.ID, arg.Stock)
+	return err
+}
+
 const listProducts = `-- name: ListProducts :many
 SELECT id, name, price_twd
 FROM products
@@ -39,4 +53,26 @@ func (q *Queries) ListProducts(ctx context.Context) ([]ListProductsRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockProduct = `-- name: LockProduct :one
+SELECT id, price_twd, stock
+FROM products
+WHERE id = $1
+FOR UPDATE
+`
+
+type LockProductRow struct {
+	ID       int32
+	PriceTwd int32
+	Stock    int32
+}
+
+// FOR UPDATE: the row lock is held until the surrounding transaction ends. Other transactions that ask for
+// the same row wait here, so "read the stock, then decide" cannot interleave with another buyer.
+func (q *Queries) LockProduct(ctx context.Context, id int32) (LockProductRow, error) {
+	row := q.db.QueryRow(ctx, lockProduct, id)
+	var i LockProductRow
+	err := row.Scan(&i.ID, &i.PriceTwd, &i.Stock)
+	return i, err
 }

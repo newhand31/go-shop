@@ -47,7 +47,7 @@ func newServer(t *testing.T, rate float64, burst int) (*httptest.Server, *counti
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	ttl := time.Hour
 	store := &countingStore{Memory: session.NewMemory(ttl)}
-	h := handler.New(oneProduct{}, noCarts{}, logger,
+	h := handler.New(oneProduct{}, noCarts{}, noOrders{}, logger,
 		handler.RateLimit(ratelimit.New(rate, burst), logger),
 		handler.Session(store, ttl, logger),
 	)
@@ -166,4 +166,11 @@ func (noCarts) SetItem(context.Context, string, int, int) (service.Cart, error) 
 }
 func (noCarts) RemoveItem(context.Context, string, int) (service.Cart, error) {
 	return service.Cart{}, nil
+}
+
+// noOrders is an Orders for tests that do not check out.
+type noOrders struct{}
+
+func (noOrders) Checkout(context.Context, string) (service.Order, error) {
+	return service.Order{}, nil
 }

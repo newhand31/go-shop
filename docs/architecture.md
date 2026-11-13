@@ -84,7 +84,7 @@ db/
   migrations/   goose（第 2 集起）
   queries/      sqlc 的 SQL（第 2 集起）
 deploy/         Dockerfile、compose（第 12 集）
-loadtest/       k6 腳本（第 6 集起）
+scripts/k6/     k6 腳本（第 6 集起）
 web/            Next.js 外殼
 docs/
 ```
