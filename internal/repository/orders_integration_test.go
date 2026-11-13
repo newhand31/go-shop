@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/newhand31/go-shop/internal/platform/postgres"
@@ -76,6 +78,22 @@ func (n naiveOrders) Place(ctx context.Context, lines []repository.OrderLine) (r
 	return repository.Order{ID: id}, tx.Commit(ctx)
 }
 
+// slowBegin wraps a pool so every transaction pauses just before it writes. The real code is untouched; the pause only
+// widens the gap between "check the stock" and "take it". Without FOR UPDATE every buyer would sit in that gap together.
+type slowBegin struct{ pool *pgxpool.Pool }
+
+func (s slowBegin) Begin(ctx context.Context) (pgx.Tx, error) {
+	tx, err := s.pool.Begin(ctx)
+	return slowTx{tx}, err
+}
+
+type slowTx struct{ pgx.Tx }
+
+func (t slowTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {
+	time.Sleep(50 * time.Millisecond)
+	return t.Tx.Exec(ctx, sql, args...)
+}
+
 // memCart is a per-buyer cart that always holds one monitor.
 type memCart struct{}
 
@@ -138,10 +156,10 @@ func TestOversell_WithoutALockMoreThanTheStockIsSold(t *testing.T) {
 	t.Logf("1 monitor in stock, %d sold", units)
 }
 
-// The fix: same stampede through repository.Orders. Exactly one buyer wins, everyone else gets out_of_stock.
+// The fix: same stampede through repository.Orders (with a pause before each write, so removing FOR UPDATE makes this fail). Exactly one buyer wins, everyone else gets out_of_stock.
 func TestOversell_WithForUpdateExactlyTheStockIsSold(t *testing.T) {
 	pool := openMigrated(t)
-	bought, soldOut := stampede(t, repository.NewOrders(pool))
+	bought, soldOut := stampede(t, repository.NewOrders(slowBegin{pool}))
 	orders, units, stock := countOrders(t, pool)
 	if bought != 1 || soldOut != buyers-1 {
 		t.Fatalf("bought=%d soldOut=%d, want 1 and %d", bought, soldOut, buyers-1)
@@ -162,6 +180,12 @@ func TestOrders_FailedOrderRollsBackEverything(t *testing.T) {
 	if !errors.Is(err, repository.ErrOutOfStock) {
 		t.Fatalf("err = %v, want ErrOutOfStock", err)
 	}
+	// No transaction may be left open holding the keyboard row: a new order for keyboards must go straight through.
+	short, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if _, err := repository.NewOrders(pool).Place(short, []repository.OrderLine{{ProductID: 1, Quantity: 1}}); err != nil {
+		t.Fatalf("follow-up order failed (a leaked transaction would still hold the lock): %v", err)
+	}
 	var keyboards, orders int
 	if err := pool.QueryRow(ctx, `SELECT stock FROM products WHERE id = 1`).Scan(&keyboards); err != nil {
 		t.Fatal(err)
@@ -169,8 +193,9 @@ func TestOrders_FailedOrderRollsBackEverything(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM orders`).Scan(&orders); err != nil {
 		t.Fatal(err)
 	}
-	if keyboards != 10 || orders != 0 {
-		t.Fatalf("keyboard stock=%d orders=%d, want 10 and 0: the first line leaked out of the rolled-back transaction", keyboards, orders)
+	// 10 minus the one keyboard the follow-up order bought; the failed order's 2 must not be missing.
+	if keyboards != 9 || orders != 1 {
+		t.Fatalf("keyboard stock=%d orders=%d, want 9 and 1: the first line leaked out of the rolled-back transaction", keyboards, orders)
 	}
 }
 
