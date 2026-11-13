@@ -75,6 +75,10 @@ Since episode 8 checkout also writes a row to the `outbox` table in the same tra
 
 The proof is `go test -tags=integration ./internal/repository -run Outbox`: a failed send is retried until it works, and an order that rolls back leaves no outbox row.
 
+Since episode 9 a background janitor (`service.ExpiryJanitor`, a `time.Ticker` loop started and stopped in `cmd/api/main.go`) releases orders that stayed unpaid for 15 minutes: their stock goes back and the order is stamped `expired_at`. Every sweep runs under `context.WithTimeout`, so a stuck round is cancelled and the next one starts clean.
+
+The proof is `go test ./internal/service -run Expiry` and `go test -tags=integration ./internal/repository -run Expiry`: an expired order is released, a paid one is left alone, and a round that runs out of time is cancelled.
+
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
 ---
@@ -208,3 +212,7 @@ k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 第 8 集起 `POST /checkout` 會在訂單的同一個交易裡多寫一列 `outbox`（「要寄確認信」），再由背景 goroutine（`service.OutboxDispatcher`，在 `cmd/api/main.go` 啟動與停止）稍後寄出，失敗就重試。商店目前沒有客人的 email，所以寄信器只會印出「我會寄什麼」。
 
 證明是 `go test -tags=integration ./internal/repository -run Outbox`：寄信失敗會一直重試到成功；下單回滾的話，不會留下 outbox 那一列。
+
+第 9 集起背景有一個清潔工（`service.ExpiryJanitor`，`time.Ticker` 迴圈，在 `cmd/api/main.go` 啟動與停止），把 15 分鐘沒付款的訂單釋放：庫存還回去，訂單蓋上 `expired_at`。每一輪掃描都包在 `context.WithTimeout` 裡，卡住的那一輪會被取消，下一輪重新開始。
+
+證明是 `go test ./internal/service -run Expiry` 與 `go test -tags=integration ./internal/repository -run Expiry`：逾時的訂單會被釋放、已付款的不動、單輪逾時會被取消。

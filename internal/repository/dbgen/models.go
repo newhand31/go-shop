@@ -13,6 +13,7 @@ type Order struct {
 	TotalTwd  int32
 	CreatedAt pgtype.Timestamptz
 	PaidAt    pgtype.Timestamptz
+	ExpiredAt pgtype.Timestamptz
 }
 
 type OrderLine struct {

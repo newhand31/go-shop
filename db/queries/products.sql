@@ -13,3 +13,6 @@ FOR UPDATE;
 
 -- name: DecreaseStock :exec
 UPDATE products SET stock = stock - $2 WHERE id = $1;
+
+-- name: IncreaseStock :exec
+UPDATE products SET stock = stock + $2 WHERE id = $1;

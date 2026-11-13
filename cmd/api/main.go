@@ -51,6 +51,7 @@ var (
 	_ service.CallbackVerifier = (*ecpay.Verifier)(nil)
 	_ service.OutboxStore      = (*repository.Outbox)(nil)
 	_ service.Mailer           = logMailer{}
+	_ service.ExpiryStore      = (*repository.Expiry)(nil)
 )
 
 // logMailer stands in for a real email provider: the shop has no customer email address yet (there are no accounts),
@@ -139,8 +140,8 @@ func run(logger *slog.Logger) error {
 	}
 	payments := service.NewPaymentService(verifier, repository.NewPayments(pool), logger)
 
-	// The outbox worker is a goroutine we start, so we must stop it and wait for it. The deferred function runs before
-	// the deferred pool.Close above: cancel, then wait until Run has returned, so it never touches a closed pool.
+	// The outbox worker is a goroutine we start, so we must stop it and wait for it (the same goes for the janitor below). The deferred function runs before
+	// the deferred pool.Close above: cancel, then wait until each Run has returned, so none touches a closed pool.
 	dispatcher := service.NewOutboxDispatcher(repository.NewOutbox(pool), logMailer{logger}, service.OutboxConfig{}, logger)
 	workerCtx, stopWorker := context.WithCancel(ctx)
 	workerDone := make(chan struct{})
@@ -148,9 +149,19 @@ func run(logger *slog.Logger) error {
 		defer close(workerDone)
 		dispatcher.Run(workerCtx)
 	}()
+
+	// Same ownership rule for the second goroutine, sharing the one context.
+	janitor := service.NewExpiryJanitor(repository.NewExpiry(pool), service.ExpiryConfig{}, logger)
+	janitorDone := make(chan struct{})
+	go func() {
+		defer close(janitorDone)
+		janitor.Run(workerCtx)
+	}()
+	// One defer stops both and waits for both. It is registered after pool.Close, so it runs before it.
 	defer func() {
 		stopWorker()
 		<-workerDone
+		<-janitorDone
 	}()
 
 	srv := &http.Server{Addr: ":" + port, Handler: handler.WithPaymentCallback(h, payments, logger)}

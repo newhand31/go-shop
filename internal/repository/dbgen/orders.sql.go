@@ -7,7 +7,26 @@ package dbgen
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const claimExpiredOrder = `-- name: ClaimExpiredOrder :one
+SELECT id FROM orders
+WHERE paid_at IS NULL AND expired_at IS NULL AND created_at < $1
+ORDER BY id
+LIMIT 1
+FOR UPDATE SKIP LOCKED
+`
+
+// One unpaid, unreleased order older than the cutoff. FOR UPDATE SKIP LOCKED: an order a payment callback is updating
+// right now is skipped this round instead of waited for.
+func (q *Queries) ClaimExpiredOrder(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error) {
+	row := q.db.QueryRow(ctx, claimExpiredOrder, createdAt)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
 
 const insertOrder = `-- name: InsertOrder :one
 INSERT INTO orders (total_twd) VALUES ($1) RETURNING id
@@ -38,5 +57,44 @@ func (q *Queries) InsertOrderLine(ctx context.Context, arg InsertOrderLineParams
 		arg.Quantity,
 		arg.UnitPriceTwd,
 	)
+	return err
+}
+
+const listOrderLines = `-- name: ListOrderLines :many
+SELECT product_id, quantity FROM order_lines WHERE order_id = $1 ORDER BY product_id
+`
+
+type ListOrderLinesRow struct {
+	ProductID int32
+	Quantity  int32
+}
+
+// Ordered by product id: the same lock order checkout uses, so releasing and buying cannot deadlock.
+func (q *Queries) ListOrderLines(ctx context.Context, orderID int64) ([]ListOrderLinesRow, error) {
+	rows, err := q.db.Query(ctx, listOrderLines, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrderLinesRow
+	for rows.Next() {
+		var i ListOrderLinesRow
+		if err := rows.Scan(&i.ProductID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markOrderExpired = `-- name: MarkOrderExpired :exec
+UPDATE orders SET expired_at = now() WHERE id = $1
+`
+
+func (q *Queries) MarkOrderExpired(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markOrderExpired, id)
 	return err
 }
