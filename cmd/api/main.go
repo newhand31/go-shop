@@ -49,7 +49,18 @@ var (
 	_ service.OrderStore       = (*repository.Orders)(nil)
 	_ service.PaymentStore     = (*repository.Payments)(nil)
 	_ service.CallbackVerifier = (*ecpay.Verifier)(nil)
+	_ service.OutboxStore      = (*repository.Outbox)(nil)
+	_ service.Mailer           = logMailer{}
 )
+
+// logMailer stands in for a real email provider: the shop has no customer email address yet (there are no accounts),
+// so it only writes what it would send. It is a Mailer because it has the method, nothing else.
+type logMailer struct{ logger *slog.Logger }
+
+func (m logMailer) SendOrderConfirmation(_ context.Context, orderID, totalTWD int) error {
+	m.logger.Info("would send order confirmation", "order_id", orderID, "total_twd", totalTWD)
+	return nil
+}
 
 // ecpayVerifier reads the merchant's secrets from the environment and fails closed: with no secrets the API refuses to
 // start, because a callback endpoint verified with a published key accepts anyone's forged "paid". The demo opts in
@@ -127,6 +138,20 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	payments := service.NewPaymentService(verifier, repository.NewPayments(pool), logger)
+
+	// The outbox worker is a goroutine we start, so we must stop it and wait for it. The deferred function runs before
+	// the deferred pool.Close above: cancel, then wait until Run has returned, so it never touches a closed pool.
+	dispatcher := service.NewOutboxDispatcher(repository.NewOutbox(pool), logMailer{logger}, service.OutboxConfig{}, logger)
+	workerCtx, stopWorker := context.WithCancel(ctx)
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		dispatcher.Run(workerCtx)
+	}()
+	defer func() {
+		stopWorker()
+		<-workerDone
+	}()
 
 	srv := &http.Server{Addr: ":" + port, Handler: handler.WithPaymentCallback(h, payments, logger)}
 	errCh := make(chan error, 1)

@@ -102,9 +102,20 @@ func (r *Orders) Place(ctx context.Context, lines []OrderLine) (Order, error) {
 			return Order{}, fmt.Errorf("insert order line: %w", err)
 		}
 	}
+	order.ID = int(id)
+
+	// The confirmation email is a promise made in the same transaction as the order: the row below commits with the
+	// order or rolls back with it. Sending the email here instead would be a network call inside a lock, and an order
+	// that is committed but never mailed whenever the process dies in between.
+	payload, err := confirmationPayload(order)
+	if err != nil {
+		return Order{}, fmt.Errorf("encode confirmation: %w", err)
+	}
+	if err := q.InsertOutbox(ctx, dbgen.InsertOutboxParams{Topic: TopicOrderConfirmation, Payload: payload}); err != nil {
+		return Order{}, fmt.Errorf("insert outbox: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Order{}, fmt.Errorf("commit order: %w", err)
 	}
-	order.ID = int(id)
 	return order, nil
 }
