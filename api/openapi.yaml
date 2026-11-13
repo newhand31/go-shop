@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: go-shop API
-  version: 0.3.0
+  version: 0.5.0
   description: |
     Contract-first: this file is the single source of truth for the HTTP API.
     Run `make api` to regenerate internal/api/api.gen.go.
@@ -41,6 +41,62 @@ paths:
                 $ref: "#/components/schemas/Product"
         default:
           $ref: "#/components/responses/Error"
+  /cart:
+    get:
+      operationId: getCart
+      summary: The current visitor's cart (identified by the session cookie)
+      responses:
+        "200":
+          description: The cart, items ordered by product id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        default:
+          $ref: "#/components/responses/Error"
+  /cart/items/{productId}:
+    put:
+      operationId: putCartItem
+      summary: Set how many of a product are in the cart (1 to 99)
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartItemInput"
+      responses:
+        "200":
+          description: The cart after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: deleteCartItem
+      summary: Remove a product from the cart (removing one that is not there is fine)
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The cart after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+        default:
+          $ref: "#/components/responses/Error"
 components:
   responses:
     Error:
@@ -59,6 +115,34 @@ components:
         name:
           type: string
         price_twd:
+          type: integer
+    CartItemInput:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+    CartItem:
+      type: object
+      required: [product_id, name, price_twd, quantity]
+      properties:
+        product_id:
+          type: integer
+        name:
+          type: string
+        price_twd:
+          type: integer
+        quantity:
+          type: integer
+    Cart:
+      type: object
+      required: [items, total_twd]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CartItem"
+        total_twd:
           type: integer
     Error:
       type: object

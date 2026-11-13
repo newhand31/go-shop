@@ -12,12 +12,12 @@ Run it locally (needs Go and Docker). Since episode 2 products live in PostgreSQ
 
 ```bash
 docker compose up -d --wait
-DATABASE_URL="postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable" go run ./cmd/api
+DATABASE_URL="postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable" REDIS_URL="redis://localhost:6379/0" go run ./cmd/api
 curl http://localhost:8080/products
 ```
 
-PowerShell: `$env:DATABASE_URL = "postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable"; go run ./cmd/api`.
-Port 5432 already taken? Start with `POSTGRES_PORT=55432` and use that port in `DATABASE_URL`. The credentials are local throwaway defaults.
+PowerShell: `$env:DATABASE_URL = "postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable"; $env:REDIS_URL = "redis://localhost:6379/0"; go run ./cmd/api`.
+Since episode 5 the API also needs Redis (`REDIS_URL`; sessions and carts live there). Port 5432 or 6379 already taken? Start with `POSTGRES_PORT=55432` / `REDIS_PORT=56379` and use those ports in the URLs. The credentials are local throwaway defaults.
 
 ```bash
 go test ./...                       # unit tests, no Docker
@@ -42,6 +42,15 @@ for i in $(seq 1 200); do curl -s -o /dev/null -w "%{http_code} " http://localho
 ```
 
 The proof is a test, not a promise: `go test -tags=integration ./internal/handler` sends 1000 requests from one IP to a real server.
+
+Since episode 5 sessions and carts live in Redis, so any API instance can serve any visitor. The cart is tied to the session cookie:
+
+```bash
+curl -c jar -b jar -X PUT -d '{"quantity":2}' http://localhost:8080/cart/items/1   # add 2 of product 1
+curl -c jar -b jar http://localhost:8080/cart                                      # the cart, with a total
+```
+
+The proof is `go test -tags=integration ./internal/handler`: two API instances behind one cookie jar. With in-process memory the cart vanishes when the "load balancer" switches instance; with Redis it survives.
 
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
@@ -104,11 +113,11 @@ docker compose up -d --wait
 ```
 
 ```bash
-DATABASE_URL="postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable" go run ./cmd/api
+DATABASE_URL="postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable" REDIS_URL="redis://localhost:6379/0" go run ./cmd/api
 ```
 
-PowerShell：`$env:DATABASE_URL = "postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable"; go run ./cmd/api`。
-5432 被佔用了？用 `POSTGRES_PORT=55432` 起 compose，`DATABASE_URL` 也改成同一個 port。帳密是本機用的預設值，不是密鑰。
+PowerShell：`$env:DATABASE_URL = "postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable"; $env:REDIS_URL = "redis://localhost:6379/0"; go run ./cmd/api`。
+第 5 集起 API 也需要 Redis（`REDIS_URL`；session 與購物車都放在那裡）。5432 或 6379 被佔用了？用 `POSTGRES_PORT=55432`／`REDIS_PORT=56379` 起 compose，兩個 URL 也改成同一個 port。帳密是本機用的預設值，不是密鑰。
 
 ```bash
 curl http://localhost:8080/products
@@ -144,3 +153,12 @@ for i in $(seq 1 200); do curl -s -o /dev/null -w "%{http_code} " http://localho
 ```
 
 證明是測試不是口號：`go test -tags=integration ./internal/handler` 從同一個 IP 對真的 server 打 1000 次。
+
+第 5 集起 session 和購物車都放在 Redis，任何一台 API 都能服務任何訪客。購物車綁在 session cookie 上：
+
+```bash
+curl -c jar -b jar -X PUT -d '{"quantity":2}' http://localhost:8080/cart/items/1   # 商品 1 放 2 個
+curl -c jar -b jar http://localhost:8080/cart                                      # 看購物車與總價
+```
+
+證明是 `go test -tags=integration ./internal/handler`：兩台 API 共用一個 cookie jar。狀態放在行程記憶體，「負載平衡器」一換台購物車就空了；放在 Redis 就不會。

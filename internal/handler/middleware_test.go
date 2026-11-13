@@ -207,7 +207,7 @@ func TestChainOrder(t *testing.T) {
 			})
 		}
 	}
-	h := New(fakeProducts{}, quietLogger(), mark("first"), mark("second"))
+	h := New(fakeProducts{}, fakeCarts{}, quietLogger(), mark("first"), mark("second"))
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/healthz", nil))
 
 	want := "first in,second in,second out,first out"
@@ -222,7 +222,7 @@ func TestPanicInsideRouterIsAnAPIError(t *testing.T) {
 		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("kaboom") })
 	}
 	rec := httptest.NewRecorder()
-	New(fakeProducts{}, quietLogger(), boom).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/products", nil))
+	New(fakeProducts{}, fakeCarts{}, quietLogger(), boom).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/products", nil))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
