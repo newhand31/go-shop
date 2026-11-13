@@ -18,6 +18,7 @@ type Memory struct {
 
 	mu       sync.Mutex
 	sessions map[string]time.Time // id → expiry
+	lastGC   time.Time
 }
 
 // NewMemory returns a store whose sessions expire after ttl without use.
@@ -36,7 +37,10 @@ func (m *Memory) Create(_ context.Context) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := m.now()
-	m.gc(now)
+	if now.Sub(m.lastGC) >= m.ttl/10 { // sweep at most every ttl/10: one O(n) walk per Create would be a CPU sink
+		m.lastGC = now
+		m.gc(now)
+	}
 	m.sessions[id] = now.Add(m.ttl)
 	return id, nil
 }

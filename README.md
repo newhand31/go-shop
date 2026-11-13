@@ -38,7 +38,7 @@ Since episode 4 every request goes through a middleware chain: request log → p
 
 ```bash
 curl -i http://localhost:8080/products     # Set-Cookie: sid=...
-for i in $(seq 1 40); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/products; done   # 200 ... then 429
+for i in $(seq 1 200); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/products; done   # 200 ... then 429
 ```
 
 The proof is a test, not a promise: `go test -tags=integration ./internal/handler` sends 1000 requests from one IP to a real server.
@@ -140,7 +140,7 @@ curl http://localhost:8080/products/abc    # 400 {"code":"invalid_request","fiel
 
 ```bash
 curl -i http://localhost:8080/products     # Set-Cookie: sid=...
-for i in $(seq 1 40); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/products; done   # 200 … 之後 429
+for i in $(seq 1 200); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8080/products; done   # 200 … 之後 429
 ```
 
 證明是測試不是口號：`go test -tags=integration ./internal/handler` 從同一個 IP 對真的 server 打 1000 次。

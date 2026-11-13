@@ -42,6 +42,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 				if rec == http.ErrAbortHandler {
 					panic(rec) // the sentinel net/http itself uses to abort a response; let it through
 				}
+				// If the handler already wrote part of a response, this JSON lands after it; acceptable here.
 				logger.Error("panic recovered", "panic", rec, "stack", string(debug.Stack()))
 				writeJSON(w, logger, http.StatusInternalServerError, api.Error{Code: "internal_error", Message: "internal error"})
 			}()
@@ -110,6 +111,8 @@ func Session(store SessionStore, ttl time.Duration, logger *slog.Logger) func(ht
 					writeError(w, logger, err)
 					return
 				}
+				// The cookie lives ttl from creation (absolute); the store slides its own expiry. After ttl the
+				// browser drops the cookie and the next request simply starts a new session.
 				http.SetCookie(w, &http.Cookie{
 					Name:     sessionCookie,
 					Value:    id,

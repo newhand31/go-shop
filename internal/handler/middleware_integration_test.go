@@ -30,24 +30,36 @@ func (oneProduct) Get(context.Context, int) (service.Product, error) {
 	return service.Product{ID: 1, Name: "keyboard", PriceTWD: 1500}, nil
 }
 
+// countingStore counts Create calls, to prove a flood never gets as far as the session store.
+type countingStore struct {
+	*session.Memory
+	created atomic.Int64
+}
+
+func (c *countingStore) Create(ctx context.Context) (string, error) {
+	c.created.Add(1)
+	return c.Memory.Create(ctx)
+}
+
 // newServer wires the real chain over real TCP: real limiter, real session store, real net/http server.
-func newServer(t *testing.T, rate float64, burst int) *httptest.Server {
+func newServer(t *testing.T, rate float64, burst int) (*httptest.Server, *countingStore) {
 	t.Helper()
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	ttl := time.Hour
+	store := &countingStore{Memory: session.NewMemory(ttl)}
 	h := handler.New(oneProduct{}, logger,
 		handler.RateLimit(ratelimit.New(rate, burst), logger),
-		handler.Session(session.NewMemory(ttl), ttl, logger),
+		handler.Session(store, ttl, logger),
 	)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, store
 }
 
 // The incident: one IP, a thousand requests. The limiter must let through only burst + what refilled meanwhile.
 func TestFloodFromOneIPIsMostlyRejected(t *testing.T) {
 	const burst, rate, total = 10, 5.0, 1000
-	srv := newServer(t, rate, burst)
+	srv, store := newServer(t, rate, burst)
 
 	var ok, limited int
 	start := time.Now()
@@ -79,13 +91,20 @@ func TestFloodFromOneIPIsMostlyRejected(t *testing.T) {
 	if ok < burst {
 		t.Fatalf("only %d requests passed, the burst of %d should", ok, burst)
 	}
+	if limited == 0 {
+		t.Fatal("nothing was rate limited")
+	}
+	// Every request without a cookie that passes the limiter creates one session; the rejected ones create none.
+	if got := store.created.Load(); got > int64(ok) {
+		t.Fatalf("%d sessions created for %d passed requests: the flood reached the session store", got, ok)
+	}
 	t.Logf("ok=%d limited=%d elapsed=%v", ok, limited, elapsed)
 }
 
 // Many goroutines share one limiter; the mutex inside must keep the count honest.
 func TestLimiterHoldsUnderConcurrency(t *testing.T) {
 	const burst, rate = 20, 1.0
-	srv := newServer(t, rate, burst)
+	srv, _ := newServer(t, rate, burst)
 
 	var passed atomic.Int64
 	var wg sync.WaitGroup
@@ -117,7 +136,7 @@ func TestLimiterHoldsUnderConcurrency(t *testing.T) {
 
 // A browser (cookie jar) gets one session id on its first visit and keeps it.
 func TestSessionCookieSticks(t *testing.T) {
-	srv := newServer(t, 100, 100)
+	srv, _ := newServer(t, 100, 100)
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatal(err)
