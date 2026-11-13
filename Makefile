@@ -1,6 +1,7 @@
 # Shortcuts for the commands in README. Every target is a plain command you can also run by hand.
 SQLC_VERSION := 1.31.1
 DATABASE_URL ?= postgres://goshop:goshop@localhost:5432/goshop?sslmode=disable
+REDIS_URL ?= redis://localhost:6379/0
 
 OAPI_CODEGEN_VERSION := v2.8.2
 
@@ -13,7 +14,7 @@ db-down:
 	docker compose down
 
 run:
-	DATABASE_URL="$(DATABASE_URL)" go run ./cmd/api
+	DATABASE_URL="$(DATABASE_URL)" REDIS_URL="$(REDIS_URL)" go run ./cmd/api
 
 # sqlc runs in Docker, so no local C toolchain is needed.
 sqlc:

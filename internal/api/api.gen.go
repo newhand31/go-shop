@@ -11,6 +11,25 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Cart defines model for Cart.
+type Cart struct {
+	Items    []CartItem `json:"items"`
+	TotalTwd int        `json:"total_twd"`
+}
+
+// CartItem defines model for CartItem.
+type CartItem struct {
+	Name      string `json:"name"`
+	PriceTwd  int    `json:"price_twd"`
+	ProductId int    `json:"product_id"`
+	Quantity  int    `json:"quantity"`
+}
+
+// CartItemInput defines model for CartItemInput.
+type CartItemInput struct {
+	Quantity int `json:"quantity"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Code Stable machine-readable code. Clients switch on this, never on message.
@@ -32,8 +51,20 @@ type Product struct {
 	PriceTwd int    `json:"price_twd"`
 }
 
+// PutCartItemJSONRequestBody defines body for PutCartItem for application/json ContentType.
+type PutCartItemJSONRequestBody = CartItemInput
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetCart The current visitor's cart (identified by the session cookie)
+	// (GET /cart)
+	GetCart(w http.ResponseWriter, r *http.Request)
+	// DeleteCartItem Remove a product from the cart (removing one that is not there is fine)
+	// (DELETE /cart/items/{productId})
+	DeleteCartItem(w http.ResponseWriter, r *http.Request, productId int)
+	// PutCartItem Set how many of a product are in the cart (1 to 99)
+	// (PUT /cart/items/{productId})
+	PutCartItem(w http.ResponseWriter, r *http.Request, productId int)
 	// ListProducts List all products
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request)
@@ -45,6 +76,24 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// GetCart The current visitor's cart (identified by the session cookie)
+// (GET /cart)
+func (_ Unimplemented) GetCart(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// DeleteCartItem Remove a product from the cart (removing one that is not there is fine)
+// (DELETE /cart/items/{productId})
+func (_ Unimplemented) DeleteCartItem(w http.ResponseWriter, r *http.Request, productId int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// PutCartItem Set how many of a product are in the cart (1 to 99)
+// (PUT /cart/items/{productId})
+func (_ Unimplemented) PutCartItem(w http.ResponseWriter, r *http.Request, productId int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // ListProducts List all products
 // (GET /products)
@@ -66,6 +115,72 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetCart operation middleware
+func (siw *ServerInterfaceWrapper) GetCart(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCart(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCartItem operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCartItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "productId" -------------
+	var productId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "productId", chi.URLParam(r, "productId"), &productId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "productId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCartItem(w, r, productId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutCartItem operation middleware
+func (siw *ServerInterfaceWrapper) PutCartItem(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "productId" -------------
+	var productId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "productId", chi.URLParam(r, "productId"), &productId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "productId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutCartItem(w, r, productId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListProducts operation middleware
 func (siw *ServerInterfaceWrapper) ListProducts(w http.ResponseWriter, r *http.Request) {
@@ -225,6 +340,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/products/{id}", wrapper.GetProduct)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/cart", wrapper.GetCart)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/cart/items/{productId}", wrapper.DeleteCartItem)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/cart/items/{productId}", wrapper.PutCartItem)
 	})
 
 	return r

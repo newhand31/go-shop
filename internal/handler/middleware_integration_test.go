@@ -47,7 +47,7 @@ func newServer(t *testing.T, rate float64, burst int) (*httptest.Server, *counti
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	ttl := time.Hour
 	store := &countingStore{Memory: session.NewMemory(ttl)}
-	h := handler.New(oneProduct{}, logger,
+	h := handler.New(oneProduct{}, noCarts{}, logger,
 		handler.RateLimit(ratelimit.New(rate, burst), logger),
 		handler.Session(store, ttl, logger),
 	)
@@ -155,4 +155,15 @@ func TestSessionCookieSticks(t *testing.T) {
 	if setCookies[0] != 1 || setCookies[1] != 0 || setCookies[2] != 0 {
 		t.Fatalf("Set-Cookie count per response = %v, want [1 0 0]", setCookies)
 	}
+}
+
+// noCarts is a Carts for tests that only exercise middleware.
+type noCarts struct{}
+
+func (noCarts) Get(context.Context, string) (service.Cart, error) { return service.Cart{}, nil }
+func (noCarts) SetItem(context.Context, string, int, int) (service.Cart, error) {
+	return service.Cart{}, nil
+}
+func (noCarts) RemoveItem(context.Context, string, int) (service.Cart, error) {
+	return service.Cart{}, nil
 }

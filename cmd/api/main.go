@@ -16,6 +16,7 @@ import (
 	"github.com/newhand31/go-shop/internal/handler"
 	"github.com/newhand31/go-shop/internal/platform/postgres"
 	"github.com/newhand31/go-shop/internal/platform/ratelimit"
+	"github.com/newhand31/go-shop/internal/platform/redis"
 	"github.com/newhand31/go-shop/internal/platform/session"
 	"github.com/newhand31/go-shop/internal/repository"
 	"github.com/newhand31/go-shop/internal/service"
@@ -26,6 +27,13 @@ const (
 	rateLimitPerSecond = 10
 	rateLimitBurst     = 20
 	sessionTTL         = 24 * time.Hour
+)
+
+// Implicit interfaces, checked where the pieces meet. Nobody wrote "implements": these lines only ask the compiler
+// whether the methods fit. Delete a method from session.Redis or repository.Carts and the build fails here.
+var (
+	_ handler.SessionStore = (*session.Redis)(nil)
+	_ service.CartStore    = (*repository.Carts)(nil)
 )
 
 func main() {
@@ -46,6 +54,10 @@ func run(logger *slog.Logger) error {
 	if dbURL == "" {
 		return errors.New("DATABASE_URL is not set")
 	}
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		return errors.New("REDIS_URL is not set")
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -61,13 +73,20 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
+	rdb, err := redis.Open(ctx, redisURL)
+	if err != nil {
+		return err
+	}
+	defer rdb.Close()
+
 	// Build from the inside out: repository → service → handler.
 	repo := repository.NewProducts(pool)
 	svc := service.NewProductService(repo)
 	// Middleware order matters: the rate limiter sits before the session store, so a flood never gets to create sessions.
 	limiter := ratelimit.New(rateLimitPerSecond, rateLimitBurst)
-	sessions := session.NewMemory(sessionTTL)
-	h := handler.New(svc, logger,
+	sessions := session.NewRedis(rdb, sessionTTL) // was session.NewMemory in episode 4: the handler cannot tell
+	carts := service.NewCartService(repository.NewCarts(rdb), svc)
+	h := handler.New(svc, carts, logger,
 		handler.RateLimit(limiter, logger),
 		handler.Session(sessions, sessionTTL, logger),
 	)
