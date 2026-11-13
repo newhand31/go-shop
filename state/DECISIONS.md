@@ -7,6 +7,9 @@
 
 <!-- entries below, newest first -->
 
+## [2026-11-13] 金流：go-shop 自寫綠界回呼，不 import twpayhook
+選：第 7 集在 go-shop 內自寫綠界回呼驗章與解析（internal/payment/ecpay），當教學內容。否決：import twpayhook（使用者的私人學習 repo，維持不公開；公開 repo 依賴私人模組，觀眾無法建置）。因為：使用者 2026-11-13 拍板「twpayhook不公開，go-shop寫自己邏輯來教學」。
+
 ## [2026-11-12] 英語市場：另開英文頻道，腳本用英文重寫
 - 選了: 另開英文 YouTube 頻道；同一個 repo、同一個事故與 tag，英文腳本放 docs/scripts/en/，用英文笑點重寫
 - 否決: 同頻道加英文配音音軌（笑點直譯會冷、AI 配音缺個性）；只上英文字幕（英語觀眾少看字幕版技術片）

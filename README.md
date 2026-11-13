@@ -67,7 +67,7 @@ Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([d
 | 資料庫 | PostgreSQL + pgx + sqlc，migration 用 goose |
 | 快取／狀態 | Redis（session、購物車、限流、搶購預扣） |
 | 非同步 | outbox + NATS（或 RabbitMQ）+ worker |
-| 金流 | 綠界回呼，import [`github.com/newhand31/twpayhook`](https://github.com/newhand31/twpayhook)（本 repo 只 import 不改它） |
+| 金流 | 綠界回呼，驗章與解析在本 repo 自己寫（`internal/payment/ecpay`） |
 | 可觀測性 | slog + OpenTelemetry + Prometheus |
 | 生命週期 | graceful shutdown |
 | 測試 | table-driven + testcontainers-go，壓測用 k6 |
