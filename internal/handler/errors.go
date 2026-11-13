@@ -41,6 +41,10 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		status, body = http.StatusNotFound, api.Error{Code: "product_not_found", Message: "product not found"}
 	case errors.Is(err, service.ErrOutOfStock):
 		status, body = http.StatusConflict, api.Error{Code: "out_of_stock", Message: "not enough stock"}
+	case errors.Is(err, service.ErrBusy):
+		// Back-pressure: the queue is full, the request never reached the database. Tell the client when to try again.
+		w.Header().Set("Retry-After", "1")
+		status, body = http.StatusServiceUnavailable, api.Error{Code: "busy", Message: "the shop is busy, try again in a moment"}
 	case errors.As(err, &validation):
 		status, body = http.StatusBadRequest, api.Error{Code: "invalid_request", Message: validation.Message, Field: &validation.Field}
 	case errors.As(err, &badParam):
