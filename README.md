@@ -71,6 +71,10 @@ Since episode 7 the shop accepts ECPay's payment callback at `POST /payments/ecp
 
 The proof is `go test -tags=integration ./internal/repository`: the same signed callback delivered 10 times at once is recorded exactly once, and a forged or wrong-amount callback records nothing. The signature rules are unit-tested in `go test ./internal/payment/ecpay`.
 
+Since episode 8 checkout also writes a row to the `outbox` table in the same transaction as the order ("send a confirmation email"), and a background goroutine (`service.OutboxDispatcher`, started and stopped in `cmd/api/main.go`) sends it later and retries on failure. The shop has no customer email addresses yet, so the mailer only logs what it would send.
+
+The proof is `go test -tags=integration ./internal/repository -run Outbox`: a failed send is retried until it works, and an order that rolls back leaves no outbox row.
+
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
 ---
@@ -200,3 +204,7 @@ k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 第 7 集起 API 在 `POST /payments/ecpay/callback` 接綠界的付款回呼。驗章（`CheckMacValue`、SHA-256）與欄位解析都在本 repo 自己寫（`internal/payment/ecpay`），只用標準庫。綠界沒收到 `1|OK` 就會一直重送，所以同一筆付款可能來好幾次；`payments.trade_no` 設成 `UNIQUE`，這條約束就是冪等鍵。API 需要 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV`，沒設就拒絕啟動；示範時設 `ECPAY_SANDBOX=1` 改用綠界公開的 sandbox 測試帳密（不能拿來收真的錢）。
 
 證明是 `go test -tags=integration ./internal/repository`：同一筆簽好章的回呼同時送 10 次，只入帳一次；偽造或金額不符的回呼什麼都不會記。驗章規則的單元測試在 `go test ./internal/payment/ecpay`。
+
+第 8 集起 `POST /checkout` 會在訂單的同一個交易裡多寫一列 `outbox`（「要寄確認信」），再由背景 goroutine（`service.OutboxDispatcher`，在 `cmd/api/main.go` 啟動與停止）稍後寄出，失敗就重試。商店目前沒有客人的 email，所以寄信器只會印出「我會寄什麼」。
+
+證明是 `go test -tags=integration ./internal/repository -run Outbox`：寄信失敗會一直重試到成功；下單回滾的話，不會留下 outbox 那一列。
