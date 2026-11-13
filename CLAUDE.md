@@ -49,7 +49,7 @@
 - 本 repo 是公開的。不放密鑰、個人資料、本機路徑；不點名評論真人或其他創作者。
 - 程式碼識別字、註解、測試案例名、commit 訊息一律英文（觀眾含英語市場）。
 - README 中英雙語；改一邊要同步另一邊。
-- 腳本按語言分：中文 `docs/scripts/epNN.md`，英文 `docs/scripts/en/epNN.md`。英文腳本照 `docs/style-guide.md` §6 重寫笑點，不直譯。
+- 腳本按語言分：中文 `docs/scripts/epNN.md`，英文 `docs/scripts/en/epNN.md`。英文腳本照 `docs/style-guide.md` §6 重寫笑點，不直譯。英文版上獨立的英文頻道，語言對照以 Java 為主、C# 為輔（中文版維持 C# 為主）。
 - 授權：程式碼 MIT（`LICENSE`），`docs/` 為 CC BY-NC 4.0（`docs/LICENSE.md`）。
 
 ## 決策紀錄
