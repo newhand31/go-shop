@@ -214,6 +214,18 @@ func TestRedisExpiry(t *testing.T) {
 		t.Fatal("session should have expired")
 	}
 
+	// Sliding: a session used every 1.2 s outlives its 2 s TTL.
+	id, err = sessions.Create(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		time.Sleep(1200 * time.Millisecond)
+		if ok, err := sessions.Exists(ctx, id); err != nil || !ok {
+			t.Fatalf("use %d: session died despite being used (%v, %v)", i, ok, err)
+		}
+	}
+
 	carts := repository.NewCarts(rdb)
 	if err := carts.SetItem(ctx, "c1", 1, 2); err != nil {
 		t.Fatal(err)
@@ -221,6 +233,16 @@ func TestRedisExpiry(t *testing.T) {
 	ttl, err := rdb.TTL(ctx, "cart:c1").Result()
 	if err != nil || ttl <= 0 || ttl > 7*24*time.Hour {
 		t.Fatalf("cart ttl = %v, %v; want a positive expiry of at most 7 days", ttl, err)
+	}
+	// A write pushes the expiry forward again: shorten it by hand, write, and it is back to days.
+	if err := rdb.Expire(ctx, "cart:c1", time.Minute).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err := carts.SetItem(ctx, "c1", 1, 2); err != nil {
+		t.Fatal(err)
+	}
+	if ttl, _ := rdb.TTL(ctx, "cart:c1").Result(); ttl < 24*time.Hour {
+		t.Fatalf("cart ttl after write = %v, want it refreshed to days", ttl)
 	}
 	items, err := carts.Items(ctx, "c1")
 	if err != nil || items[1] != 2 {

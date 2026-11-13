@@ -40,7 +40,7 @@ func (s *server) PutCartItem(w http.ResponseWriter, r *http.Request, productID i
 	var in api.CartItemInput
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&in); err != nil {
+	if err := dec.Decode(&in); err != nil || dec.More() {
 		writeError(w, s.logger, &service.ValidationError{Field: "body", Message: "must be a JSON object like {\"quantity\": 2}"})
 		return
 	}

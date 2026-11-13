@@ -70,6 +70,7 @@ func TestCartRoutes(t *testing.T) {
 		{"put item", http.MethodPut, "/cart/items/1", `{"quantity":2}`, fakeCarts{cart: oneLine}, http.StatusOK, ""},
 		{"delete item", http.MethodDelete, "/cart/items/1", "", fakeCarts{cart: oneLine}, http.StatusOK, ""},
 		{"put with bad json", http.MethodPut, "/cart/items/1", `{"quantity":`, fakeCarts{}, http.StatusBadRequest, "invalid_request"},
+		{"put with trailing data", http.MethodPut, "/cart/items/1", `{"quantity":1} junk`, fakeCarts{}, http.StatusBadRequest, "invalid_request"},
 		{"put with unknown field", http.MethodPut, "/cart/items/1", `{"quantity":1,"price":0}`, fakeCarts{}, http.StatusBadRequest, "invalid_request"},
 		{"put with non-numeric product id", http.MethodPut, "/cart/items/abc", `{"quantity":1}`, fakeCarts{}, http.StatusBadRequest, "invalid_request"},
 		{"put unknown product", http.MethodPut, "/cart/items/9", `{"quantity":1}`, fakeCarts{err: fmt.Errorf("x: %w", service.ErrProductNotFound)}, http.StatusNotFound, "product_not_found"},
