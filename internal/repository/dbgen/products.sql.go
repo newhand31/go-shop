@@ -23,6 +23,20 @@ func (q *Queries) DecreaseStock(ctx context.Context, arg DecreaseStockParams) er
 	return err
 }
 
+const increaseStock = `-- name: IncreaseStock :exec
+UPDATE products SET stock = stock + $2 WHERE id = $1
+`
+
+type IncreaseStockParams struct {
+	ID    int32
+	Stock int32
+}
+
+func (q *Queries) IncreaseStock(ctx context.Context, arg IncreaseStockParams) error {
+	_, err := q.db.Exec(ctx, increaseStock, arg.ID, arg.Stock)
+	return err
+}
+
 const listProducts = `-- name: ListProducts :many
 SELECT id, name, price_twd
 FROM products
