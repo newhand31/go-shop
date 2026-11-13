@@ -12,6 +12,7 @@ type Order struct {
 	ID        int64
 	TotalTwd  int32
 	CreatedAt pgtype.Timestamptz
+	PaidAt    pgtype.Timestamptz
 }
 
 type OrderLine struct {
@@ -19,6 +20,14 @@ type OrderLine struct {
 	ProductID    int32
 	Quantity     int32
 	UnitPriceTwd int32
+}
+
+type Payment struct {
+	ID        int64
+	OrderID   int64
+	TradeNo   string
+	AmountTwd int32
+	CreatedAt pgtype.Timestamptz
 }
 
 type Product struct {

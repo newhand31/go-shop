@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/newhand31/go-shop/internal/handler"
+	"github.com/newhand31/go-shop/internal/payment/ecpay"
 	"github.com/newhand31/go-shop/internal/platform/postgres"
 	"github.com/newhand31/go-shop/internal/platform/ratelimit"
 	"github.com/newhand31/go-shop/internal/platform/redis"
@@ -42,11 +43,28 @@ func envInt(name string, def int) int {
 // Implicit interfaces, checked where the pieces meet. Nobody wrote "implements": these lines only ask the compiler
 // whether the methods fit. Delete a method from session.Redis or repository.Carts and the build fails here.
 var (
-	_ handler.SessionStore = (*session.Redis)(nil)
-	_ service.CartStore    = (*repository.Carts)(nil)
-	_ service.CheckoutCart = (*repository.Carts)(nil)
-	_ service.OrderStore   = (*repository.Orders)(nil)
+	_ handler.SessionStore     = (*session.Redis)(nil)
+	_ service.CartStore        = (*repository.Carts)(nil)
+	_ service.CheckoutCart     = (*repository.Carts)(nil)
+	_ service.OrderStore       = (*repository.Orders)(nil)
+	_ service.PaymentStore     = (*repository.Payments)(nil)
+	_ service.CallbackVerifier = (*ecpay.Verifier)(nil)
 )
+
+// ecpayVerifier reads the merchant's secrets from the environment and fails closed: with no secrets the API refuses to
+// start, because a callback endpoint verified with a published key accepts anyone's forged "paid". The demo opts in
+// to ECPay's public sandbox credentials explicitly with ECPAY_SANDBOX=1.
+func ecpayVerifier(logger *slog.Logger) (*ecpay.Verifier, error) {
+	id, key, iv := os.Getenv("ECPAY_MERCHANT_ID"), os.Getenv("ECPAY_HASH_KEY"), os.Getenv("ECPAY_HASH_IV")
+	if id != "" && key != "" && iv != "" {
+		return ecpay.NewVerifier(id, key, iv), nil
+	}
+	if os.Getenv("ECPAY_SANDBOX") == "1" {
+		logger.Warn("ECPAY_SANDBOX=1: using ECPay's public sandbox credentials, test payments only")
+		return ecpay.NewVerifier(ecpay.SandboxMerchantID, ecpay.SandboxHashKey, ecpay.SandboxHashIV), nil
+	}
+	return nil, errors.New("set ECPAY_MERCHANT_ID, ECPAY_HASH_KEY and ECPAY_HASH_IV (or ECPAY_SANDBOX=1 for the public test credentials)")
+}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -104,7 +122,13 @@ func run(logger *slog.Logger) error {
 		handler.Session(sessions, sessionTTL, logger),
 	)
 
-	srv := &http.Server{Addr: ":" + port, Handler: h}
+	verifier, err := ecpayVerifier(logger)
+	if err != nil {
+		return err
+	}
+	payments := service.NewPaymentService(verifier, repository.NewPayments(pool), logger)
+
+	srv := &http.Server{Addr: ":" + port, Handler: handler.WithPaymentCallback(h, payments, logger)}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	logger.Info("api listening", "port", port)

@@ -67,6 +67,10 @@ docker compose exec postgres psql -U goshop -c "UPDATE products SET stock = 1 WH
 k6 run scripts/k6/oversell.js     # exactly 1 order, 49 times 409
 ```
 
+Since episode 7 the shop accepts ECPay's payment callback at `POST /payments/ecpay/callback`. The signature check (`CheckMacValue`, SHA-256) and the field parsing are written in this repo, in `internal/payment/ecpay`, using only the standard library. ECPay resends a callback until it gets `1|OK`, so the same payment can arrive many times; `payments.trade_no` is `UNIQUE`, and that constraint is the idempotency key. The API needs `ECPAY_MERCHANT_ID`, `ECPAY_HASH_KEY` and `ECPAY_HASH_IV` and refuses to start without them; for the demo set `ECPAY_SANDBOX=1` to use ECPay's published sandbox test credentials (never for real money).
+
+The proof is `go test -tags=integration ./internal/repository`: the same signed callback delivered 10 times at once is recorded exactly once, and a forged or wrong-amount callback records nothing. The signature rules are unit-tested in `go test ./internal/payment/ecpay`.
+
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
 ---
@@ -192,3 +196,7 @@ RATE_LIMIT_RPS=100000 RATE_LIMIT_BURST=100000 DATABASE_URL=... REDIS_URL=... go 
 docker compose exec postgres psql -U goshop -c "UPDATE products SET stock = 1 WHERE id = 3"
 k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 ```
+
+第 7 集起 API 在 `POST /payments/ecpay/callback` 接綠界的付款回呼。驗章（`CheckMacValue`、SHA-256）與欄位解析都在本 repo 自己寫（`internal/payment/ecpay`），只用標準庫。綠界沒收到 `1|OK` 就會一直重送，所以同一筆付款可能來好幾次；`payments.trade_no` 設成 `UNIQUE`，這條約束就是冪等鍵。API 需要 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV`，沒設就拒絕啟動；示範時設 `ECPAY_SANDBOX=1` 改用綠界公開的 sandbox 測試帳密（不能拿來收真的錢）。
+
+證明是 `go test -tags=integration ./internal/repository`：同一筆簽好章的回呼同時送 10 次，只入帳一次；偽造或金額不符的回呼什麼都不會記。驗章規則的單元測試在 `go test ./internal/payment/ecpay`。
