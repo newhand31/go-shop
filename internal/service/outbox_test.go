@@ -93,8 +93,10 @@ func TestOutboxDispatcher_RunStopsWhenContextIsCancelled(t *testing.T) {
 		d.Run(ctx)
 	}()
 
-	for store.calls.Load() < 3 { // it really is looping
-		time.Sleep(time.Millisecond)
+	for wait := time.Now(); store.calls.Load() < 3; time.Sleep(time.Millisecond) { // it really is looping
+		if time.Since(wait) > 2*time.Second {
+			t.Fatal("Run never looped")
+		}
 	}
 	cancel()
 	select {

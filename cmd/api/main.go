@@ -53,9 +53,6 @@ var (
 	_ service.Mailer           = logMailer{}
 )
 
-// ecpayVerifier reads the merchant's secrets from the environment and fails closed: with no secrets the API refuses to
-// start, because a callback endpoint verified with a published key accepts anyone's forged "paid". The demo opts in
-// to ECPay's public sandbox credentials explicitly with ECPAY_SANDBOX=1.
 // logMailer stands in for a real email provider: the shop has no customer email address yet (there are no accounts),
 // so it only writes what it would send. It is a Mailer because it has the method, nothing else.
 type logMailer struct{ logger *slog.Logger }
@@ -65,6 +62,9 @@ func (m logMailer) SendOrderConfirmation(_ context.Context, orderID, totalTWD in
 	return nil
 }
 
+// ecpayVerifier reads the merchant's secrets from the environment and fails closed: with no secrets the API refuses to
+// start, because a callback endpoint verified with a published key accepts anyone's forged "paid". The demo opts in
+// to ECPay's public sandbox credentials explicitly with ECPAY_SANDBOX=1.
 func ecpayVerifier(logger *slog.Logger) (*ecpay.Verifier, error) {
 	id, key, iv := os.Getenv("ECPAY_MERCHANT_ID"), os.Getenv("ECPAY_HASH_KEY"), os.Getenv("ECPAY_HASH_IV")
 	if id != "" && key != "" && iv != "" {
