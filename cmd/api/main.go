@@ -11,11 +11,21 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/newhand31/go-shop/internal/handler"
 	"github.com/newhand31/go-shop/internal/platform/postgres"
+	"github.com/newhand31/go-shop/internal/platform/ratelimit"
+	"github.com/newhand31/go-shop/internal/platform/session"
 	"github.com/newhand31/go-shop/internal/repository"
 	"github.com/newhand31/go-shop/internal/service"
+)
+
+// Per client IP: 10 requests a second on average, bursts up to 20. A shop page makes a handful of calls, a script makes thousands.
+const (
+	rateLimitPerSecond = 10
+	rateLimitBurst     = 20
+	sessionTTL         = 24 * time.Hour
 )
 
 func main() {
@@ -54,7 +64,13 @@ func run(logger *slog.Logger) error {
 	// Build from the inside out: repository → service → handler.
 	repo := repository.NewProducts(pool)
 	svc := service.NewProductService(repo)
-	h := handler.New(svc, logger)
+	// Middleware order matters: the rate limiter sits before the session store, so a flood never gets to create sessions.
+	limiter := ratelimit.New(rateLimitPerSecond, rateLimitBurst)
+	sessions := session.NewMemory(sessionTTL)
+	h := handler.New(svc, logger,
+		handler.RateLimit(limiter, logger),
+		handler.Session(sessions, sessionTTL, logger),
+	)
 
 	srv := &http.Server{Addr: ":" + port, Handler: h}
 	errCh := make(chan error, 1)
