@@ -14,9 +14,24 @@ import (
 	"github.com/newhand31/go-shop/db"
 )
 
-// Open creates a pgx pool and pings it, so a wrong DATABASE_URL fails at startup instead of on the first request.
+// Open creates a pgx pool with pgx's default size and pings it, so a wrong DATABASE_URL fails at startup instead of on
+// the first request.
 func Open(ctx context.Context, url string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, url)
+	return OpenWithMaxConns(ctx, url, 0)
+}
+
+// OpenWithMaxConns is Open with an explicit ceiling on connections (0 keeps pgx's default). The ceiling is a promise
+// to the database: PostgreSQL allows 100 connections by default, and every API instance spends up to this many of them.
+// A request that wants a connection when all are busy waits for one; it does not open a new one.
+func OpenWithMaxConns(ctx context.Context, url string, maxConns int32) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return nil, fmt.Errorf("parse database url: %w", err)
+	}
+	if maxConns > 0 {
+		cfg.MaxConns = maxConns
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("create pool: %w", err)
 	}

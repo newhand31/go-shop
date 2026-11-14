@@ -77,6 +77,10 @@ The proof is `go test -tags=integration ./internal/repository -run Outbox`: a fa
 
 Since episode 9 a background janitor (`service.ExpiryJanitor`, a `time.Ticker` loop started and stopped in `cmd/api/main.go`) releases orders that stayed unpaid for 15 minutes: their stock goes back and the order is stamped `expired_at`. Every sweep runs under `context.WithTimeout`, so a stuck round is cancelled and the next one starts clean.
 
+Since episode 10 there is an optional flash-sale route, `POST /flash-sales/{productID}/orders`, switched on by `FLASH_SALE_PRODUCT_ID` and `FLASH_SALE_STOCK` (without them the route does not exist). A Redis Lua script pre-deducts one unit (`repository.Reservations`), a bounded channel plus `select … default` turns away buyers the shop has no room for with a 503 and `Retry-After` (`service.FlashSale`), and a few workers (`FLASH_SALE_WORKERS`, default 4) are the only ones allowed into a connection pool capped by `DB_MAX_CONNS` (default 10). The queue length is `FLASH_SALE_QUEUE` (default 64).
+
+The proof is `go test ./internal/service -run Flash` and `go test -tags=integration ./internal/service -run Integration`: the pre-deduction never oversells, a full queue rejects without touching the database, and busy connections never exceed the worker count.
+
 The proof is `go test ./internal/service -run Expiry` and `go test -tags=integration ./internal/repository -run Expiry`: an expired order is released, a paid one is left alone, and a round that runs out of time is cancelled.
 
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
@@ -216,3 +220,7 @@ k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 第 9 集起背景有一個清潔工（`service.ExpiryJanitor`，`time.Ticker` 迴圈，在 `cmd/api/main.go` 啟動與停止），把 15 分鐘沒付款的訂單釋放：庫存還回去，訂單蓋上 `expired_at`。每一輪掃描都包在 `context.WithTimeout` 裡，卡住的那一輪會被取消，下一輪重新開始。
 
 證明是 `go test ./internal/service -run Expiry` 與 `go test -tags=integration ./internal/repository -run Expiry`：逾時的訂單會被釋放、已付款的不動、單輪逾時會被取消。
+
+第 10 集起有一條可選的搶購路由 `POST /flash-sales/{productID}/orders`，用 `FLASH_SALE_PRODUCT_ID` 與 `FLASH_SALE_STOCK` 開啟（沒設就沒有這條路由）。Redis Lua 腳本預扣一件庫存（`repository.Reservations`）；有容量上限的 channel 加 `select … default`，排不下的人當場回 503 與 `Retry-After`（`service.FlashSale`）；只有少數幾個 worker（`FLASH_SALE_WORKERS`，預設 4）能進到上限由 `DB_MAX_CONNS`（預設 10）控制的連線池。排隊長度是 `FLASH_SALE_QUEUE`（預設 64）。
+
+證明是 `go test ./internal/service -run Flash` 與 `go test -tags=integration ./internal/service -run Integration`：預扣不超賣、佇列滿了拒絕且不碰資料庫、忙碌的連線數不超過 worker 數。

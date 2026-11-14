@@ -30,6 +30,7 @@ const (
 	defaultRateLimitPerSecond = 10
 	defaultRateLimitBurst     = 20
 	sessionTTL                = 24 * time.Hour
+	defaultDBMaxConns         = 10 // flash-sale workers (default 4) stay well below it: the outbox, the janitor and reads share the pool
 )
 
 // envInt reads a positive integer from the environment, or returns def when it is unset or invalid.
@@ -52,6 +53,7 @@ var (
 	_ service.OutboxStore      = (*repository.Outbox)(nil)
 	_ service.Mailer           = logMailer{}
 	_ service.ExpiryStore      = (*repository.Expiry)(nil)
+	_ service.StockGate        = (*repository.Reservations)(nil)
 )
 
 // logMailer stands in for a real email provider: the shop has no customer email address yet (there are no accounts),
@@ -105,7 +107,8 @@ func run(logger *slog.Logger) error {
 		port = "8080"
 	}
 
-	pool, err := postgres.Open(ctx, dbURL)
+	// The pool has a ceiling on purpose: a stampede must wait in our queue, not pile up as connections in PostgreSQL.
+	pool, err := postgres.OpenWithMaxConns(ctx, dbURL, int32(envInt("DB_MAX_CONNS", defaultDBMaxConns)))
 	if err != nil {
 		return err
 	}
@@ -157,14 +160,38 @@ func run(logger *slog.Logger) error {
 		defer close(janitorDone)
 		janitor.Run(workerCtx)
 	}()
-	// One defer stops both and waits for both. It is registered after pool.Close, so it runs before it.
+	// The third goroutine: the flash-sale workers. flashDone exists before the defer, so every early return below is covered.
+	flashDone := make(chan struct{})
+	// One defer stops all three and waits for all three. It is registered after pool.Close, so it runs before it.
 	defer func() {
 		stopWorker()
 		<-workerDone
 		<-janitorDone
+		<-flashDone
 	}()
 
-	srv := &http.Server{Addr: ":" + port, Handler: handler.WithPaymentCallback(h, payments, logger)}
+	// Flash sale: switched on by FLASH_SALE_PRODUCT_ID and FLASH_SALE_STOCK. Off by default, the route does not exist.
+	var apiHandler http.Handler = h
+	if flashProduct := envInt("FLASH_SALE_PRODUCT_ID", 0); flashProduct > 0 {
+		reservations := repository.NewReservations(rdb)
+		created, err := reservations.Open(ctx, flashProduct, envInt("FLASH_SALE_STOCK", 1))
+		if err != nil {
+			close(flashDone) // nothing was started, so there is nothing to wait for
+			return err
+		}
+		sale := service.NewFlashSale(reservations, repository.NewOrders(pool),
+			service.FlashConfig{Workers: envInt("FLASH_SALE_WORKERS", 0), QueueSize: envInt("FLASH_SALE_QUEUE", 0)}, logger)
+		go func() {
+			defer close(flashDone)
+			sale.Run(workerCtx)
+		}()
+		apiHandler = handler.WithFlashSale(h, sale, logger, handler.RateLimit(limiter, logger))
+		logger.Info("flash sale open", "product", flashProduct, "counter_created", created)
+	} else {
+		close(flashDone)
+	}
+
+	srv := &http.Server{Addr: ":" + port, Handler: handler.WithPaymentCallback(apiHandler, payments, logger)}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	logger.Info("api listening", "port", port)
