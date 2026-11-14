@@ -52,7 +52,7 @@ func (s *PaymentService) HandleECPayCallback(ctx context.Context, params url.Val
 		return fmt.Errorf("%w: %w", ErrInvalidCallback, err)
 	}
 	if !cb.Paid {
-		s.logger.Info("payment not completed", "trade_no", cb.TradeNo, "merchant_trade_no", cb.MerchantTradeNo, "msg", cb.RtnMsg)
+		s.logger.InfoContext(ctx, "payment not completed", "trade_no", cb.TradeNo, "merchant_trade_no", cb.MerchantTradeNo, "msg", cb.RtnMsg)
 		return nil
 	}
 	orderID, err := ecpay.ParseOrderRef(cb.MerchantTradeNo)
@@ -67,9 +67,9 @@ func (s *PaymentService) HandleECPayCallback(ctx context.Context, params url.Val
 	case err != nil:
 		return fmt.Errorf("handle callback: %w", err)
 	case !recorded:
-		s.logger.Info("duplicate payment callback ignored", "trade_no", cb.TradeNo, "order", orderID)
+		s.logger.InfoContext(ctx, "duplicate payment callback ignored", "trade_no", cb.TradeNo, "order", orderID)
 	default:
-		s.logger.Info("payment recorded", "trade_no", cb.TradeNo, "order", orderID, "amount_twd", cb.AmountTWD)
+		s.logger.InfoContext(ctx, "payment recorded", "trade_no", cb.TradeNo, "order", orderID, "amount_twd", cb.AmountTWD)
 	}
 	return nil
 }

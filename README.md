@@ -81,6 +81,10 @@ Since episode 10 there is an optional flash-sale route, `POST /flash-sales/{prod
 
 The proof is `go test ./internal/service -run Flash` and `go test -tags=integration ./internal/service -run Integration`: the pre-deduction never oversells, a full queue rejects without touching the database, and busy connections never exceed the worker count.
 
+Since episode 11 every request carries a trace id. `otelhttp` opens the request span (`cmd/api/main.go`), `telemetry.NewLogHandler` copies `trace_id` and `span_id` into each `slog` record logged with a context, `service.OrderService.Checkout` adds one child span (`order.place`), and `GET /metrics` serves Prometheus metrics: `http_requests_total` and `http_request_duration_seconds`, labelled by route pattern, never by raw path. No collector is needed: `OTEL_TRACES_EXPORTER` is `none` (default, trace ids in logs only) or `stdout` (spans as JSON on stderr).
+
+The proof is `go test ./internal/handler -run "TraceID|Metrics"` and `go test ./internal/platform/telemetry`: the request log line carries the same trace id the handler sees, and `/metrics` shows the new series.
+
 The proof is `go test ./internal/service -run Expiry` and `go test -tags=integration ./internal/repository -run Expiry`: an expired order is released, a paid one is left alone, and a round that runs out of time is cancelled.
 
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
@@ -224,3 +228,7 @@ k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 第 10 集起有一條可選的搶購路由 `POST /flash-sales/{productID}/orders`，用 `FLASH_SALE_PRODUCT_ID` 與 `FLASH_SALE_STOCK` 開啟（沒設就沒有這條路由）。Redis Lua 腳本預扣一件庫存（`repository.Reservations`）；有容量上限的 channel 加 `select … default`，排不下的人當場回 503 與 `Retry-After`（`service.FlashSale`）；只有少數幾個 worker（`FLASH_SALE_WORKERS`，預設 4）能進到上限由 `DB_MAX_CONNS`（預設 10）控制的連線池。排隊長度是 `FLASH_SALE_QUEUE`（預設 64）。
 
 證明是 `go test ./internal/service -run Flash` 與 `go test -tags=integration ./internal/service -run Integration`：預扣不超賣、佇列滿了拒絕且不碰資料庫、忙碌的連線數不超過 worker 數。
+
+第 11 集起每個請求都帶 trace id。`otelhttp` 開出請求的 span（`cmd/api/main.go`），`telemetry.NewLogHandler` 把 `trace_id`、`span_id` 補進每一筆帶 context 的 `slog` 紀錄，`service.OrderService.Checkout` 多開一個子 span（`order.place`），`GET /metrics` 提供 Prometheus 指標：`http_requests_total` 與 `http_request_duration_seconds`，標籤是路由樣式，不是原始路徑。不需要外部 collector：`OTEL_TRACES_EXPORTER` 預設 `none`（只有 log 裡的 trace id），設 `stdout` 則把 span 以 JSON 印到 stderr。
+
+證明是 `go test ./internal/handler -run "TraceID|Metrics"` 與 `go test ./internal/platform/telemetry`：請求紀錄裡的 trace id 和 handler 看到的相同，`/metrics` 看得到新指標。
