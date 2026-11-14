@@ -37,8 +37,11 @@ func TestCheckout_RecordsAChildSpan(t *testing.T) {
 			parent.End()
 
 			ended := rec.Ended()[before:]
-			if len(ended) != 2 || ended[0].Name() != "order.place" {
-				t.Fatalf("ended spans = %d, first %q; want order.place then request", len(ended), ended[0].Name())
+			if len(ended) != 2 {
+				t.Fatalf("ended %d spans, want 2 (order.place, then request)", len(ended))
+			}
+			if ended[0].Name() != "order.place" {
+				t.Fatalf("first ended span = %q, want order.place", ended[0].Name())
 			}
 			if ended[0].Parent().SpanID() != parent.SpanContext().SpanID() {
 				t.Error("order.place is not a child of the request span")

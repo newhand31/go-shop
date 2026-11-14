@@ -98,7 +98,7 @@ func Session(store SessionStore, ttl time.Duration, logger *slog.Logger) func(ht
 			if c, err := r.Cookie(sessionCookie); err == nil {
 				ok, err := store.Exists(r.Context(), c.Value)
 				if err != nil {
-					writeError(w, logger, err)
+					writeError(w, r, logger, err)
 					return
 				}
 				if ok {
@@ -108,7 +108,7 @@ func Session(store SessionStore, ttl time.Duration, logger *slog.Logger) func(ht
 			if id == "" {
 				var err error
 				if id, err = store.Create(r.Context()); err != nil {
-					writeError(w, logger, err)
+					writeError(w, r, logger, err)
 					return
 				}
 				// The cookie lives ttl from creation (absolute); the store slides its own expiry. After ttl the

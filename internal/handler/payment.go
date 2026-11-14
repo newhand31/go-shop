@@ -36,11 +36,11 @@ func ECPayCallback(payments Payments, logger *slog.Logger) http.HandlerFunc {
 		case err == nil:
 			reply(w, http.StatusOK, "1|OK")
 		case errors.Is(err, service.ErrInvalidCallback), errors.Is(err, service.ErrPaymentMismatch):
-			logger.Warn("payment callback rejected", "err", err)
+			logger.WarnContext(r.Context(), "payment callback rejected", "err", err)
 			reply(w, http.StatusBadRequest, "0|rejected")
 		default:
 			// Our fault (database down): a non-"1|OK" reply makes ECPay resend, which is what we want.
-			logger.Error("payment callback failed", "err", err)
+			logger.ErrorContext(r.Context(), "payment callback failed", "err", err)
 			reply(w, http.StatusInternalServerError, "0|error")
 		}
 	}

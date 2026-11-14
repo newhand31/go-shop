@@ -154,9 +154,9 @@ func run(logger *slog.Logger) error {
 	carts := service.NewCartService(repository.NewCarts(rdb), svc)
 	orders := service.NewOrderService(repository.NewOrders(pool), repository.NewCarts(rdb), logger)
 	h := handler.New(svc, carts, orders, logger,
+		handler.Instrument(metrics), // before the limiter, so a 429 is counted too
 		handler.RateLimit(limiter, logger),
 		handler.Session(sessions, sessionTTL, logger),
-		handler.Instrument(metrics),
 	)
 
 	verifier, err := ecpayVerifier(logger)
@@ -207,7 +207,7 @@ func run(logger *slog.Logger) error {
 			defer close(flashDone)
 			sale.Run(workerCtx)
 		}()
-		apiHandler = handler.WithFlashSale(h, sale, logger, handler.RateLimit(limiter, logger), handler.Instrument(metrics))
+		apiHandler = handler.WithFlashSale(h, sale, logger, handler.Instrument(metrics), handler.RateLimit(limiter, logger))
 		logger.Info("flash sale open", "product", flashProduct, "counter_created", created)
 	} else {
 		close(flashDone)

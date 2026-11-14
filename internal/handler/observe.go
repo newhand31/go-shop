@@ -25,12 +25,28 @@ func Instrument(obs RequestObserver) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+			finished := false
+			// A panic skips every line after next, so the deferred call is the only way to count it. It counts a 500 (the
+			// status Recover, one layer out, is about to write) and does not recover: the panic keeps travelling.
+			defer func() {
+				if !finished {
+					rec.status = http.StatusInternalServerError
+				}
+				obs.Observe(r.Method, routeLabel(r), rec.status, time.Since(start))
+			}()
 			next.ServeHTTP(rec, r)
-			route := unmatchedRoute
-			if rc := chi.RouteContext(r.Context()); rc != nil && rc.RoutePattern() != "" {
-				route = rc.RoutePattern()
-			}
-			obs.Observe(r.Method, route, rec.status, time.Since(start))
+			finished = true
 		})
 	}
+}
+
+// routeLabel is the pattern chi matched. The "/*" that Mount("/", api) registers is a catch-all, not a real route:
+// it is what every unknown path matches, so it becomes "unmatched" like an empty pattern.
+func routeLabel(r *http.Request) string {
+	if rc := chi.RouteContext(r.Context()); rc != nil {
+		if p := rc.RoutePattern(); p != "" && p != "/*" {
+			return p
+		}
+	}
+	return unmatchedRoute
 }
