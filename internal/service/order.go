@@ -7,6 +7,11 @@ import (
 	"log/slog"
 	"sort"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/newhand31/go-shop/internal/repository"
 )
 
@@ -67,7 +72,16 @@ func (s *OrderService) Checkout(ctx context.Context, cartID string) (Order, erro
 	}
 	sort.Slice(lines, func(i, j int) bool { return lines[i].ProductID < lines[j].ProductID })
 
-	placed, err := s.store.Place(ctx, lines)
+	// The one hand-made span of the episode. otelhttp already opened "the request"; this child is "the part that
+	// talks to PostgreSQL", so a slow checkout shows whether the time went into the transaction or somewhere else.
+	// otel.Tracer asks the global provider main installed; without one it is a no-op and costs nothing.
+	placeCtx, span := otel.Tracer("go-shop/service").Start(ctx, "order.place", trace.WithAttributes(attribute.Int("order.lines", len(lines))))
+	placed, err := s.store.Place(placeCtx, lines)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "place order failed")
+	}
+	span.End()
 	switch {
 	case errors.Is(err, repository.ErrOutOfStock):
 		return Order{}, fmt.Errorf("checkout: %w: %w", ErrOutOfStock, err)
@@ -81,7 +95,7 @@ func (s *OrderService) Checkout(ctx context.Context, cartID string) (Order, erro
 	// order for money-moving work that already happened, so log and move on. (Making this idempotent is out of scope.)
 	for _, l := range lines {
 		if err := s.carts.RemoveItem(ctx, cartID, l.ProductID); err != nil {
-			s.logger.Warn("order placed but cart not emptied", "order", placed.ID, "product", l.ProductID, "err", err)
+			s.logger.WarnContext(ctx, "order placed but cart not emptied", "order", placed.ID, "product", l.ProductID, "err", err)
 		}
 	}
 

@@ -58,9 +58,9 @@ const ECPayCallbackPath = "/payments/ecpay/callback"
 // WithPaymentCallback puts the callback route in front of the API handler. It sits outside the rate limiter and the
 // session middleware on purpose: the caller is ECPay's server, which has no cookie and must not be throttled as a visitor.
 // Its authentication is the CheckMacValue signature, checked in the service.
-func WithPaymentCallback(api http.Handler, payments Payments, logger *slog.Logger) http.Handler {
+func WithPaymentCallback(api http.Handler, payments Payments, logger *slog.Logger, middleware ...func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
-	r.With(RequestLog(logger), Recover(logger)).Post(ECPayCallbackPath, ECPayCallback(payments, logger))
+	r.With(RequestLog(logger), Recover(logger)).With(middleware...).Post(ECPayCallbackPath, ECPayCallback(payments, logger))
 	r.Mount("/", api)
 	return r
 }

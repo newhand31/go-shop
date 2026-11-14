@@ -43,7 +43,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 					panic(rec) // the sentinel net/http itself uses to abort a response; let it through
 				}
 				// If the handler already wrote part of a response, this JSON lands after it; acceptable here.
-				logger.Error("panic recovered", "panic", rec, "stack", string(debug.Stack()))
+				logger.ErrorContext(r.Context(), "panic recovered", "panic", rec, "stack", string(debug.Stack()))
 				writeJSON(w, logger, http.StatusInternalServerError, api.Error{Code: "internal_error", Message: "internal error"})
 			}()
 			next.ServeHTTP(w, r)
