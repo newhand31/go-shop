@@ -77,6 +77,8 @@ The proof is `go test -tags=integration ./internal/repository -run Outbox`: a fa
 
 Since episode 9 a background janitor (`service.ExpiryJanitor`, a `time.Ticker` loop started and stopped in `cmd/api/main.go`) releases orders that stayed unpaid for 15 minutes: their stock goes back and the order is stamped `expired_at`. Every sweep runs under `context.WithTimeout`, so a stuck round is cancelled and the next one starts clean.
 
+The proof is `go test ./internal/service -run Expiry` and `go test -tags=integration ./internal/repository -run Expiry`: an expired order is released, a paid one is left alone, and a round that runs out of time is cancelled.
+
 Since episode 10 there is an optional flash-sale route, `POST /flash-sales/{productID}/orders`, switched on by `FLASH_SALE_PRODUCT_ID` and `FLASH_SALE_STOCK` (without them the route does not exist). A Redis Lua script pre-deducts one unit (`repository.Reservations`), a bounded channel plus `select … default` turns away buyers the shop has no room for with a 503 and `Retry-After` (`service.FlashSale`), and a few workers (`FLASH_SALE_WORKERS`, default 4) are the only ones allowed into a connection pool capped by `DB_MAX_CONNS` (default 10). The queue length is `FLASH_SALE_QUEUE` (default 64).
 
 The proof is `go test ./internal/service -run Flash` and `go test -tags=integration ./internal/service -run Integration`: the pre-deduction never oversells, a full queue rejects without touching the database, and busy connections never exceed the worker count.
@@ -89,7 +91,9 @@ Since episode 12 the API shuts down gracefully. `SIGINT` and `SIGTERM` (what `do
 
 The proof is `go test ./internal/platform/lifecycle ./cmd/api`: a request still running when the stop signal arrives gets its answer before `Serve` returns, new connections are refused, a grace period that runs out cuts the rest, and a buyer queued behind a busy flash-sale worker is still served. One more test reads the `Dockerfile` as text (it does not build an image).
 
-The proof is `go test ./internal/service -run Expiry` and `go test -tags=integration ./internal/repository -run Expiry`: an expired order is released, a paid one is left alone, and a round that runs out of time is cancelled.
+The bonus episode (`ep13-pitfalls`) adds no feature. `internal/pitfalls` holds three Go traps next to their fixes: a nil pointer inside an interface is not a nil interface, a closure over a loop variable sees one shared variable before Go 1.22 (one file is pinned to the old rules with `//go:build go1.21` so both behaviours sit side by side), and `append` on a sub-slice can overwrite the original (`cart[:n:n]` prevents it). Nothing in the shop imports it.
+
+The proof is `go test ./internal/pitfalls -v`: each trap has a test that makes it fire and a test that proves the fix.
 
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
@@ -240,3 +244,7 @@ k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 第 12 集起 API 會優雅關機。`SIGINT` 與 `SIGTERM`（`docker stop` 送的就是它）先關掉監聽，進行中的請求最多有 `SHUTDOWN_GRACE_SECONDS`（預設 25）秒做完（`lifecycle.Serve`），之後才停止背景 goroutine 並等它們結束（`lifecycle.Group`），所以排在搶購佇列裡的客人仍會被服務；然後才關 Redis、連線池並沖出最後的 span。`Dockerfile` 是多階段、最後一階 `FROM scratch`（靜態二進位、`CGO_ENABLED=0`、沒有 shell、沒有 `HEALTHCHECK`）；`docker compose --profile app up --build` 會跑整個商店，`docker stop` 時日誌應出現 `stop signal received: requests drained, workers stopped`。
 
 證明是 `go test ./internal/platform/lifecycle ./cmd/api`：停止訊號到達時還在跑的請求會先收到回應，`Serve` 才回來；新連線被拒絕；寬限時間用完就砍掉剩下的；排在忙碌搶購 worker 後面的買家仍會被服務。另有一個測試把 `Dockerfile` 當文字讀（不會建置 image）。
+
+番外（`ep13-pitfalls`）沒有新功能。`internal/pitfalls` 把三個 Go 的坑和修法放在一起：nil 指標放進 interface 後不等於 nil interface；Go 1.22 以前 closure 抓迴圈變數看到的是同一個變數（其中一個檔案用 `//go:build go1.21` 釘回舊規則，兩種行為並排）；對子 slice 做 `append` 可能蓋掉原本的資料（用 `cart[:n:n]` 避免）。商店本身沒有引用它。
+
+證明是 `go test ./internal/pitfalls -v`：每個坑都有一個讓它發生的測試，和一個證明修法的測試。
