@@ -146,7 +146,7 @@ head := cart[:n:n]
 
 【畫面】`go test ./internal/pitfalls -v`，六個綠色 PASS。
 
-> 這集的證明不是壓測，是六個測試。每個坑兩個：一個讓坑發生，一個證明修法。
+> 這集的證明不是壓測，是六個測試，按坑分組：每個坑都會讓它發生一次，再確認修法有效。
 > 第一組，`findBuggy(1)` 回傳的 `err != nil` 是 true，而且裡面裝的是一個 nil 的 `*NotFoundError`；`findFixed(1)` 回傳真正的 nil。
 > 第二組，`counterNew(3)` 是 0、1、2；`counterOld(3)` 是 3、3、3。後者是那個被降版本的檔案。
 > 第三組，`firstBuggy` 之後購物車變成 10、20、99、40；`firstFixed` 之後購物車不動。

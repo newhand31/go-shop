@@ -93,7 +93,7 @@ The proof is `go test ./internal/platform/lifecycle ./cmd/api`: a request still 
 
 The bonus episode (`ep13-pitfalls`) adds no feature. `internal/pitfalls` holds three Go traps next to their fixes: a nil pointer inside an interface is not a nil interface, a closure over a loop variable sees one shared variable before Go 1.22 (one file is pinned to the old rules with `//go:build go1.21` so both behaviours sit side by side), and `append` on a sub-slice can overwrite the original (`cart[:n:n]` prevents it). Nothing in the shop imports it.
 
-The proof is `go test ./internal/pitfalls -v`: each trap has a test that makes it fire and a test that proves the fix.
+The proof is `go test ./internal/pitfalls -v`: each trap is made to fire once and its fix is checked.
 
 Code: MIT ([LICENSE](LICENSE)). Docs and scripts under `docs/`: CC BY-NC 4.0 ([docs/LICENSE.md](docs/LICENSE.md)).
 
@@ -247,4 +247,4 @@ k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 
 番外（`ep13-pitfalls`）沒有新功能。`internal/pitfalls` 把三個 Go 的坑和修法放在一起：nil 指標放進 interface 後不等於 nil interface；Go 1.22 以前 closure 抓迴圈變數看到的是同一個變數（其中一個檔案用 `//go:build go1.21` 釘回舊規則，兩種行為並排）；對子 slice 做 `append` 可能蓋掉原本的資料（用 `cart[:n:n]` 避免）。商店本身沒有引用它。
 
-證明是 `go test ./internal/pitfalls -v`：每個坑都有一個讓它發生的測試，和一個證明修法的測試。
+證明是 `go test ./internal/pitfalls -v`：每個坑都會讓它發生一次，並確認修法有效。

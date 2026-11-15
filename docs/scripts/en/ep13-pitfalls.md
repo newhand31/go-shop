@@ -126,7 +126,7 @@ head := cart[:n:n]
 > Capacity is now 2. `append` finds no room, allocates a new array and copies. The cart is untouched. Or call `slices.Clone`, which says what you mean.
 > The nastier version: you never call `append`, but you hand `head` to another function, and that function does. You cannot tell from its signature whether it writes.
 > So before a public function returns a sub-slice, ask whether it should be a `slices.Clone`. And if all you do is read, do not copy: a window is cheap exactly because it does not copy. **The price of cheap is knowing who owns the memory.**
-> So why doesn't this bite in Java? Because `subList` is documented as a view and everybody knows to copy, and C#'s `GetRange` hands you a copy. Go gives you the window by default. **If you want a copy, you have to say so.**
+> Java's `subList` is a view too, and it bites differently: `head.add(99)` writes through to the parent list, inserting at index 2 and shifting the rest, where Go silently overwrites item three. C#'s `GetRange` hands you a copy, so there you are safe. Go gives you the window by default. **If you want a copy, you have to say so.**
 
 ---
 
@@ -145,7 +145,7 @@ head := cart[:n:n]
 
 【畫面】`go test ./internal/pitfalls -v`, six green PASS lines.
 
-> The proof tonight is not a load test. It is six small tests, two per trap: one makes the trap fire, one proves the fix.
+> The proof tonight is not a load test. It is six small tests, grouped by trap: each trap is made to fire once, and the fix is checked.
 > First pair: `findBuggy(1)` returns a non-nil error holding a nil `*NotFoundError`. `findFixed(1)` returns a real nil.
 > Second pair: `counterNew(3)` returns 0, 1, 2. `counterOld(3)` returns 3, 3, 3. The second one lives in the file we pinned to Go 1.21.
 > Third pair: after `firstBuggy` the cart reads 10, 20, 99, 40. After `firstFixed` it is unchanged.
@@ -177,7 +177,7 @@ head := cart[:n:n]
 
 - Laugh timestamps are estimates; re-time against the real recording. About 1,350 spoken words (code excluded), roughly 8 minutes at the series pace; about 3 minutes come from screen and code beats. If the recording runs short, move the later timestamps earlier.
 - "`go vet` stays quiet": on this machine `go vet` printed nothing for `internal/pitfalls`. "Extra linters can catch some shapes of it" was not tested with any third-party linter; run one before naming a tool on screen.
-- The Java lambda statement ("the compiler refuses a capture of a changing variable") and the C# one (`foreach` fresh variable per iteration since C# 5, `for` still shared) are from memory; check both against the official docs before recording.
+- The Java `subList` write-through statement (`add` inserts into the parent and shifts the rest) and the Java lambda statement ("the compiler refuses a capture of a changing variable") and the C# one (`foreach` fresh variable per iteration since C# 5, `for` still shared) are from memory; check both against the official docs before recording.
 - Per-file language version: confirmed locally. `counterOld(3)` returns 3, 3, 3 in the file with `//go:build go1.21`, and `counterNew(3)` returns 0, 1, 2.
 - `slices.Clone` is standard library (Go 1.21 and later). No new dependencies, no new configuration.
 - The sign-off is the fixed line from style-guide §6.1.
