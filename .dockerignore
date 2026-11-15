@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.env
+.env.*
+*.md
+!README.md
+docs
+state
+scripts
+bin
+*.exe
+*.test
+*.out
+Dockerfile
+.dockerignore
+docker-compose.yml

@@ -6,12 +6,13 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/newhand31/go-shop/internal/handler"
 	"github.com/newhand31/go-shop/internal/payment/ecpay"
+	"github.com/newhand31/go-shop/internal/platform/lifecycle"
 	"github.com/newhand31/go-shop/internal/platform/postgres"
 	"github.com/newhand31/go-shop/internal/platform/ratelimit"
 	"github.com/newhand31/go-shop/internal/platform/redis"
@@ -95,8 +97,9 @@ func main() {
 
 // run returns errors instead of calling os.Exit, so every defer (closing the pool) actually runs.
 func run(logger *slog.Logger) error {
-	// Ctrl+C cancels ctx. Draining in-flight requests properly is episode 12; here we only make sure the pool closes.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// Ctrl+C (SIGINT) and docker stop (SIGTERM) both cancel ctx. ctx only means "stop taking requests": the background
+	// goroutines below deliberately do not hang off it, because running requests may still need them (see serveThenStop).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// Telemetry first, so even the startup logs and every later span have a home. OTEL_TRACES_EXPORTER=stdout prints spans
@@ -165,32 +168,16 @@ func run(logger *slog.Logger) error {
 	}
 	payments := service.NewPaymentService(verifier, repository.NewPayments(pool), logger)
 
-	// The outbox worker is a goroutine we start, so we must stop it and wait for it (the same goes for the janitor below). The deferred function runs before
-	// the deferred pool.Close above: cancel, then wait until each Run has returned, so none touches a closed pool.
-	dispatcher := service.NewOutboxDispatcher(repository.NewOutbox(pool), logMailer{logger}, service.OutboxConfig{}, logger)
-	workerCtx, stopWorker := context.WithCancel(ctx)
-	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
-		dispatcher.Run(workerCtx)
-	}()
+	// Background goroutines live in one group with its own context, not ctx: a signal must not stop them while requests
+	// are still draining. The deferred Stop is for the early returns below; the normal path stops them in serveThenStop,
+	// right after the server has drained. Registered after pool.Close, so it runs before it: nothing touches a closed pool.
+	workers := lifecycle.NewGroup()
+	defer workers.Stop()
 
-	// Same ownership rule for the second goroutine, sharing the one context.
+	dispatcher := service.NewOutboxDispatcher(repository.NewOutbox(pool), logMailer{logger}, service.OutboxConfig{}, logger)
+	workers.Go(dispatcher.Run)
 	janitor := service.NewExpiryJanitor(repository.NewExpiry(pool), service.ExpiryConfig{}, logger)
-	janitorDone := make(chan struct{})
-	go func() {
-		defer close(janitorDone)
-		janitor.Run(workerCtx)
-	}()
-	// The third goroutine: the flash-sale workers. flashDone exists before the defer, so every early return below is covered.
-	flashDone := make(chan struct{})
-	// One defer stops all three and waits for all three. It is registered after pool.Close, so it runs before it.
-	defer func() {
-		stopWorker()
-		<-workerDone
-		<-janitorDone
-		<-flashDone
-	}()
+	workers.Go(janitor.Run)
 
 	// Flash sale: switched on by FLASH_SALE_PRODUCT_ID and FLASH_SALE_STOCK. Off by default, the route does not exist.
 	var apiHandler http.Handler = h
@@ -198,19 +185,13 @@ func run(logger *slog.Logger) error {
 		reservations := repository.NewReservations(rdb)
 		created, err := reservations.Open(ctx, flashProduct, envInt("FLASH_SALE_STOCK", 1))
 		if err != nil {
-			close(flashDone) // nothing was started, so there is nothing to wait for
 			return err
 		}
 		sale := service.NewFlashSale(reservations, repository.NewOrders(pool),
 			service.FlashConfig{Workers: envInt("FLASH_SALE_WORKERS", 0), QueueSize: envInt("FLASH_SALE_QUEUE", 0)}, logger)
-		go func() {
-			defer close(flashDone)
-			sale.Run(workerCtx)
-		}()
+		workers.Go(sale.Run) // the third goroutine: the flash-sale workers
 		apiHandler = handler.WithFlashSale(h, sale, logger, handler.Instrument(metrics), handler.RateLimit(limiter, logger))
 		logger.Info("flash sale open", "product", flashProduct, "counter_created", created)
-	} else {
-		close(flashDone)
 	}
 
 	// otelhttp is the outermost layer: it opens the request's span before anything else runs, so RequestLog and every
@@ -220,16 +201,20 @@ func run(logger *slog.Logger) error {
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", metrics.Handler())
 	mux.Handle("/", shop)
-	srv := &http.Server{Addr: ":" + port, Handler: mux}
-	errCh := make(chan error, 1)
-	go func() { errCh <- srv.ListenAndServe() }()
-	logger.Info("api listening", "port", port)
-
-	select {
-	case err := <-errCh:
-		return fmt.Errorf("serve: %w", err)
-	case <-ctx.Done():
-		logger.Info("interrupt received, closing")
-		return srv.Close()
+	srv := &http.Server{Handler: mux}
+	ln, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		return err
 	}
+	logger.Info("api listening", "port", port)
+	// After the first signal, give Ctrl+C back its default meaning: a second one then ends the process even mid-drain.
+	go func() { <-ctx.Done(); stop() }()
+
+	// Blocks until a signal arrives, then: refuse new connections, let running requests finish, stop the workers.
+	// The defers after this return close Redis and the pool, and flush the last spans.
+	err = serveThenStop(ctx, srv, ln, time.Duration(envInt("SHUTDOWN_GRACE_SECONDS", int(defaultShutdownGrace/time.Second)))*time.Second, workers)
+	if err == nil {
+		logger.Info("stop signal received: requests drained, workers stopped")
+	}
+	return err // a grace period that ran out is an error, so the process exits non-zero and the deploy sees it
 }
