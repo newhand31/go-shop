@@ -33,7 +33,7 @@ var _ api.ServerInterface = (*server)(nil)
 func (s *server) ListProducts(w http.ResponseWriter, r *http.Request) {
 	items, err := s.products.List(r.Context())
 	if err != nil {
-		writeError(w, s.logger, err)
+		writeError(w, r, s.logger, err)
 		return
 	}
 	out := make([]api.Product, 0, len(items))
@@ -46,7 +46,7 @@ func (s *server) ListProducts(w http.ResponseWriter, r *http.Request) {
 func (s *server) GetProduct(w http.ResponseWriter, r *http.Request, id int) {
 	p, err := s.products.Get(r.Context(), id)
 	if err != nil {
-		writeError(w, s.logger, err)
+		writeError(w, r, s.logger, err)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, toAPI(p))
@@ -73,7 +73,7 @@ func New(products Products, carts Carts, orders Orders, logger *slog.Logger, mid
 	return api.HandlerWithOptions(&server{products: products, carts: carts, orders: orders, logger: logger}, api.ChiServerOptions{
 		BaseRouter: r,
 		// Path/param binding errors happen inside generated code; send them through the same writeError.
-		ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) { writeError(w, logger, err) },
+		ErrorHandlerFunc: func(w http.ResponseWriter, req *http.Request, err error) { writeError(w, req, logger, err) },
 	})
 }
 
@@ -94,7 +94,7 @@ func RequestLog(logger *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rec, r)
-			logger.Info("request",
+			logger.InfoContext(r.Context(), "request",
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", rec.status,

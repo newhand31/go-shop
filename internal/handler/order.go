@@ -17,12 +17,12 @@ type Orders interface {
 func (s *server) Checkout(w http.ResponseWriter, r *http.Request) {
 	id := SessionID(r.Context())
 	if id == "" {
-		writeError(w, s.logger, errNoSession)
+		writeError(w, r, s.logger, errNoSession)
 		return
 	}
 	order, err := s.orders.Checkout(r.Context(), id)
 	if err != nil {
-		writeError(w, s.logger, err)
+		writeError(w, r, s.logger, err)
 		return
 	}
 	out := api.Order{Id: order.ID, TotalTwd: order.TotalTWD, Lines: make([]api.OrderLine, 0, len(order.Lines))}

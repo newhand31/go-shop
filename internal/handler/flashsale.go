@@ -35,7 +35,7 @@ func FlashSaleBuy(sales FlashSales, logger *slog.Logger) http.HandlerFunc {
 		}
 		order, err := sales.Buy(r.Context(), productID, 1)
 		if err != nil {
-			writeError(w, logger, err)
+			writeError(w, r, logger, err)
 			return
 		}
 		out := api.Order{Id: order.ID, TotalTwd: order.TotalTWD, Lines: make([]api.OrderLine, 0, len(order.Lines))}

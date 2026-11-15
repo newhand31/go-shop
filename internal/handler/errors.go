@@ -26,7 +26,7 @@ func writeJSON(w http.ResponseWriter, logger *slog.Logger, status int, body any)
 //
 // The switch is the whole trick: errors.Is asks "is this error, anywhere in its %w chain, that sentinel?",
 // errors.As asks "is there a value of this type in the chain, and give it to me".
-func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
+func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err error) {
 	var (
 		status = http.StatusInternalServerError
 		body   = api.Error{Code: "internal_error", Message: "internal error"}
@@ -58,7 +58,7 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	// of those inputs, so they cannot occur yet; add a case here when the spec starts using them.
 	default:
 		// Unknown error: log the real cause, never send it to the client.
-		logger.Error("request failed", "err", err)
+		logger.ErrorContext(r.Context(), "request failed", "err", err)
 	}
 	writeJSON(w, logger, status, body)
 }

@@ -24,43 +24,43 @@ var errNoSession = errors.New("no session on the request context; is the Session
 func (s *server) GetCart(w http.ResponseWriter, r *http.Request) {
 	id := SessionID(r.Context())
 	if id == "" {
-		writeError(w, s.logger, errNoSession)
+		writeError(w, r, s.logger, errNoSession)
 		return
 	}
 	cart, err := s.carts.Get(r.Context(), id)
-	s.writeCart(w, cart, err)
+	s.writeCart(w, r, cart, err)
 }
 
 func (s *server) PutCartItem(w http.ResponseWriter, r *http.Request, productID int) {
 	id := SessionID(r.Context())
 	if id == "" {
-		writeError(w, s.logger, errNoSession)
+		writeError(w, r, s.logger, errNoSession)
 		return
 	}
 	var in api.CartItemInput
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&in); err != nil || dec.More() {
-		writeError(w, s.logger, &service.ValidationError{Field: "body", Message: "must be a JSON object like {\"quantity\": 2}"})
+		writeError(w, r, s.logger, &service.ValidationError{Field: "body", Message: "must be a JSON object like {\"quantity\": 2}"})
 		return
 	}
 	cart, err := s.carts.SetItem(r.Context(), id, productID, in.Quantity)
-	s.writeCart(w, cart, err)
+	s.writeCart(w, r, cart, err)
 }
 
 func (s *server) DeleteCartItem(w http.ResponseWriter, r *http.Request, productID int) {
 	id := SessionID(r.Context())
 	if id == "" {
-		writeError(w, s.logger, errNoSession)
+		writeError(w, r, s.logger, errNoSession)
 		return
 	}
 	cart, err := s.carts.RemoveItem(r.Context(), id, productID)
-	s.writeCart(w, cart, err)
+	s.writeCart(w, r, cart, err)
 }
 
-func (s *server) writeCart(w http.ResponseWriter, cart service.Cart, err error) {
+func (s *server) writeCart(w http.ResponseWriter, r *http.Request, cart service.Cart, err error) {
 	if err != nil {
-		writeError(w, s.logger, err)
+		writeError(w, r, s.logger, err)
 		return
 	}
 	out := api.Cart{Items: make([]api.CartItem, 0, len(cart.Items)), TotalTwd: cart.TotalTWD}

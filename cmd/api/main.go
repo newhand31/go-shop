@@ -14,12 +14,16 @@ import (
 	"strconv"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+
 	"github.com/newhand31/go-shop/internal/handler"
 	"github.com/newhand31/go-shop/internal/payment/ecpay"
 	"github.com/newhand31/go-shop/internal/platform/postgres"
 	"github.com/newhand31/go-shop/internal/platform/ratelimit"
 	"github.com/newhand31/go-shop/internal/platform/redis"
 	"github.com/newhand31/go-shop/internal/platform/session"
+	"github.com/newhand31/go-shop/internal/platform/telemetry"
 	"github.com/newhand31/go-shop/internal/repository"
 	"github.com/newhand31/go-shop/internal/service"
 )
@@ -81,7 +85,8 @@ func ecpayVerifier(logger *slog.Logger) (*ecpay.Verifier, error) {
 }
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// The wrapper adds trace_id and span_id to any record logged with a context that carries a span.
+	logger := slog.New(telemetry.NewLogHandler(slog.NewJSONHandler(os.Stdout, nil)))
 	if err := run(logger); err != nil {
 		logger.Error("api stopped", "err", err)
 		os.Exit(1)
@@ -93,6 +98,22 @@ func run(logger *slog.Logger) error {
 	// Ctrl+C cancels ctx. Draining in-flight requests properly is episode 12; here we only make sure the pool closes.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+
+	// Telemetry first, so even the startup logs and every later span have a home. OTEL_TRACES_EXPORTER=stdout prints spans
+	// to stderr (stdout is the JSON log); unset or "none" keeps trace ids in the logs without exporting anything.
+	tp, err := telemetry.NewTracerProvider(os.Getenv("OTEL_TRACES_EXPORTER"), os.Stderr)
+	if err != nil {
+		return err
+	}
+	otel.SetTracerProvider(tp)
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := telemetry.Shutdown(flushCtx, tp); err != nil {
+			logger.Error("flush spans", "err", err)
+		}
+	}()
+	metrics := telemetry.NewMetrics()
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -133,6 +154,7 @@ func run(logger *slog.Logger) error {
 	carts := service.NewCartService(repository.NewCarts(rdb), svc)
 	orders := service.NewOrderService(repository.NewOrders(pool), repository.NewCarts(rdb), logger)
 	h := handler.New(svc, carts, orders, logger,
+		handler.Instrument(metrics), // before the limiter, so a 429 is counted too
 		handler.RateLimit(limiter, logger),
 		handler.Session(sessions, sessionTTL, logger),
 	)
@@ -185,13 +207,20 @@ func run(logger *slog.Logger) error {
 			defer close(flashDone)
 			sale.Run(workerCtx)
 		}()
-		apiHandler = handler.WithFlashSale(h, sale, logger, handler.RateLimit(limiter, logger))
+		apiHandler = handler.WithFlashSale(h, sale, logger, handler.Instrument(metrics), handler.RateLimit(limiter, logger))
 		logger.Info("flash sale open", "product", flashProduct, "counter_created", created)
 	} else {
 		close(flashDone)
 	}
 
-	srv := &http.Server{Addr: ":" + port, Handler: handler.WithPaymentCallback(apiHandler, payments, logger)}
+	// otelhttp is the outermost layer: it opens the request's span before anything else runs, so RequestLog and every
+	// handler below see a context that already carries the trace id. /metrics sits beside the shop, outside the rate
+	// limiter and the session, because Prometheus is not a visitor. Real deployments scrape it on an internal port.
+	shop := otelhttp.NewHandler(handler.WithPaymentCallback(apiHandler, payments, logger, handler.Instrument(metrics)), "shop", otelhttp.WithTracerProvider(tp))
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", metrics.Handler())
+	mux.Handle("/", shop)
+	srv := &http.Server{Addr: ":" + port, Handler: mux}
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	logger.Info("api listening", "port", port)
