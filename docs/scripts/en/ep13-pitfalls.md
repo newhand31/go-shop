@@ -1,6 +1,6 @@
 # Bonus episode | Three Go traps that compile cleanly (voice-over draft v0, English channel)
 
-- Target length: about 11 minutes (about 1,500 spoken words plus screen-only beats and code on screen; re-time after recording)
+- Target length: about 11 minutes (about 1,350 spoken words (roughly 8 minutes) plus screen-only beats and code on screen; re-time after recording)
 - The topic: **three things that look right, compile, and are wrong.** One: a nil pointer inside an interface is not a nil interface (compare Java's `null`, C#'s `null`). Two: the loop variable captured by a closure, before and after Go 1.22 (compare closures in Java lambdas and C# lambdas). Three: slices share their underlying array (compare `ArrayList.subList` and `List<T>.GetRange`).
 - Code: tag `ep13-pitfalls` (`git checkout ep13-pitfalls`); the examples live in `internal/pitfalls` and nothing in the shop imports them. The tests are the lesson.
 - Rewritten for the English channel per [style-guide.md](../../style-guide.md) §6, not translated from the [Chinese script](../ep13-pitfalls.md). Comparisons lead with Java (Spring Boot), C# (ASP.NET Core) second.
@@ -71,6 +71,8 @@ func findFixed(id int) error {
 ```
 
 > One rule: **a function that returns `error` returns the literal `nil` on success, never a variable of a concrete type.** The moment a typed pointer becomes an interface, it carries a type with it.
+> This trap loves custom error types. You write a `validate()` that returns `*ValidationError`; when all is well you return that variable. The caller receives it as `error`, and you have just walked into it.
+> When in doubt, print the value with `%T` and with `%v`. `%T` says `*pitfalls.NotFoundError` and `%v` says `<nil>`. **A type with no value is the fingerprint of this trap.**
 > Java and C# do not have this problem, because their `null` is one value. Go has two: "no box" and "empty box."
 
 ---
@@ -92,6 +94,8 @@ for i := 0; i < n; i++ {
 > The old rule: one `i` for the whole loop, and all three closures hold the same one. The loop ends when `i` reaches 3, so everyone reports 3.
 > **My first goroutine loop did this. I started ten workers and all ten processed the last order. Ten workers, one order, and the dashboard looked busy.**
 > Since Go 1.22 every iteration gets its own `i`. This repo's `go.mod` says Go 1.27, so you are safe by default.
+> The more common version uses goroutines: `for _, o := range orders { go process(o) }`. Before 1.22, ten goroutines often all received the last order. The charm of that era was `o := o` inside the loop, or passing `o` as an argument.
+> One detail people miss: the new rule follows the `go 1.22` (or later) line in `go.mod`. Upgrade the toolchain to 1.27 without touching `go.mod` and nothing changes. **Upgrading the compiler is not upgrading the language version.**
 > Why bring it up? Two reasons. You will read older code, and `i := i` on its own line is a charm from that era. And **the language version is per file.** `go.mod` sets the default; a `//go:build go1.21` line at the top of one file puts that file back under the old rules. That is how this repo shows both behaviours side by side.
 > For the Java readers: a lambda cannot capture a changing `i` at all, the compiler refuses. Go lets you, and so you have to know the rule. And C# readers: C# changed `foreach` to a fresh variable per iteration long ago; its three-part `for` still shares one. Go 1.22 changed the `for`.
 
@@ -120,6 +124,8 @@ head := cart[:n:n]
 ```
 
 > Capacity is now 2. `append` finds no room, allocates a new array and copies. The cart is untouched. Or call `slices.Clone`, which says what you mean.
+> The nastier version: you never call `append`, but you hand `head` to another function, and that function does. You cannot tell from its signature whether it writes.
+> So before a public function returns a sub-slice, ask whether it should be a `slices.Clone`. And if all you do is read, do not copy: a window is cheap exactly because it does not copy. **The price of cheap is knowing who owns the memory.**
 > So why doesn't this bite in Java? Because `subList` is documented as a view and everybody knows to copy, and C#'s `GetRange` hands you a copy. Go gives you the window by default. **If you want a copy, you have to say so.**
 
 ---
@@ -131,6 +137,7 @@ head := cart[:n:n]
 > Trap two: upgrade to 1.22 and it is gone. `go vet` also warns about the old shape for goroutines and `defer`.
 > Trap three: no tool. You just have to ask, before every `append`: whose capacity is this?
 > Or you skip memorising and write a test. Tests are memory that someone else maintains.
+> One review habit helps: when the first argument of an `append` is not a slice you just created, ask "whose is this?" It takes five seconds, and the incident review takes an afternoon.
 
 ---
 
@@ -168,7 +175,7 @@ head := cart[:n:n]
 
 ## Appendix B: to confirm
 
-- Laugh timestamps are estimates; re-time against the real recording. About 1,500 spoken words, roughly 9–10 minutes at the series' pace; the rest comes from screen beats.
+- Laugh timestamps are estimates; re-time against the real recording. About 1,350 spoken words (code excluded), roughly 8 minutes at the series pace; about 3 minutes come from screen and code beats. If the recording runs short, move the later timestamps earlier.
 - "`go vet` stays quiet": on this machine `go vet` printed nothing for `internal/pitfalls`. "Extra linters can catch some shapes of it" was not tested with any third-party linter; run one before naming a tool on screen.
 - The Java lambda statement ("the compiler refuses a capture of a changing variable") and the C# one (`foreach` fresh variable per iteration since C# 5, `for` still shared) are from memory; check both against the official docs before recording.
 - Per-file language version: confirmed locally. `counterOld(3)` returns 3, 3, 3 in the file with `//go:build go1.21`, and `counterNew(3)` returns 0, 1, 2.
