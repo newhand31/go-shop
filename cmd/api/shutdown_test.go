@@ -90,7 +90,7 @@ func TestStopSignalLetsQueuedBuyersFinish(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	time.Sleep(100 * time.Millisecond) // B has passed the counter; give it a moment to land in the queue
+	time.Sleep(100 * time.Millisecond) // B has passed the counter; a short pause lets it land in the queue (this pins the timing only loosely: nothing exposes the queue length)
 
 	stop() // the stop signal arrives with A in the database and B in the queue
 	time.Sleep(100 * time.Millisecond)
@@ -154,9 +154,12 @@ func TestDockerfileKeepsTheShutdownPromises(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
-	var from, entry string
+	var from, entry, code string // code is every non-comment line: a comment must not satisfy the CGO check
 	for _, l := range lines {
 		l = strings.TrimSpace(l)
+		if !strings.HasPrefix(l, "#") {
+			code += l + "\n"
+		}
 		switch {
 		case strings.HasPrefix(strings.ToUpper(l), "FROM "):
 			from = l // the last FROM is the image that ships
@@ -167,11 +170,11 @@ func TestDockerfileKeepsTheShutdownPromises(t *testing.T) {
 	if !strings.HasPrefix(from, "FROM scratch") {
 		t.Errorf("the final stage is %q, want FROM scratch", from)
 	}
-	// Exec form puts our binary at PID 1, so docker stop's SIGTERM reaches it. Shell form would put /bin/sh there.
+	// Exec form puts our binary at PID 1, so docker stop's SIGTERM reaches it. (On scratch the shell form would not even start: there is no /bin/sh.)
 	if !strings.HasPrefix(entry, "ENTRYPOINT [") {
 		t.Errorf("ENTRYPOINT = %q, want the exec (JSON array) form", entry)
 	}
-	if !strings.Contains(string(raw), "CGO_ENABLED=0") {
+	if !strings.Contains(code, "CGO_ENABLED=0") {
 		t.Error("the build must set CGO_ENABLED=0: scratch has no libc to link against")
 	}
 }

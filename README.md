@@ -82,9 +82,12 @@ Since episode 10 there is an optional flash-sale route, `POST /flash-sales/{prod
 The proof is `go test ./internal/service -run Flash` and `go test -tags=integration ./internal/service -run Integration`: the pre-deduction never oversells, a full queue rejects without touching the database, and busy connections never exceed the worker count.
 
 Since episode 11 every request carries a trace id. `otelhttp` opens the request span (`cmd/api/main.go`), `telemetry.NewLogHandler` copies `trace_id` and `span_id` into each `slog` record logged with a context, `service.OrderService.Checkout` adds one child span (`order.place`), and `GET /metrics` serves Prometheus metrics: `http_requests_total` and `http_request_duration_seconds`, labelled by route pattern, never by raw path. No collector is needed: `OTEL_TRACES_EXPORTER` is `none` (default, trace ids in logs only) or `stdout` (spans as JSON on stderr).
-Since episode 12 the API shuts down gracefully. `SIGINT` and `SIGTERM` (what `docker stop` sends) stop the listener, running requests get up to `SHUTDOWN_GRACE_SECONDS` (default 25) to finish (`lifecycle.Serve`), and only then the background goroutines are stopped and awaited (`lifecycle.Group`), so a buyer waiting in the flash-sale queue is still served. Redis, the connection pool and the last spans are closed after that. The `Dockerfile` is multi-stage and ends in `FROM scratch` (a static binary, `CGO_ENABLED=0`, no shell, no `HEALTHCHECK`); `docker compose --profile app up --build` runs the whole shop, and `docker stop` should log `stop signal received: requests drained, workers stopped`.
 
 The proof is `go test ./internal/handler -run "TraceID|Metrics"` and `go test ./internal/platform/telemetry`: the request log line carries the same trace id the handler sees, and `/metrics` shows the new series.
+
+Since episode 12 the API shuts down gracefully. `SIGINT` and `SIGTERM` (what `docker stop` sends) stop the listener, running requests get up to `SHUTDOWN_GRACE_SECONDS` (default 25) to finish (`lifecycle.Serve`), and only then the background goroutines are stopped and awaited (`lifecycle.Group`), so a buyer waiting in the flash-sale queue is still served. Redis, the connection pool and the last spans are closed after that. The `Dockerfile` is multi-stage and ends in `FROM scratch` (a static binary, `CGO_ENABLED=0`, no shell, no `HEALTHCHECK`); `docker compose --profile app up --build` runs the whole shop, and `docker stop` should log `stop signal received: requests drained, workers stopped`.
+
+The proof is `go test ./internal/platform/lifecycle ./cmd/api`: a request still running when the stop signal arrives gets its answer before `Serve` returns, new connections are refused, a grace period that runs out cuts the rest, and a buyer queued behind a busy flash-sale worker is still served. One more test reads the `Dockerfile` as text (it does not build an image).
 
 The proof is `go test ./internal/service -run Expiry` and `go test -tags=integration ./internal/repository -run Expiry`: an expired order is released, a paid one is left alone, and a round that runs out of time is cancelled.
 
@@ -231,6 +234,9 @@ k6 run scripts/k6/oversell.js     # 剛好 1 張訂單，49 次 409
 證明是 `go test ./internal/service -run Flash` 與 `go test -tags=integration ./internal/service -run Integration`：預扣不超賣、佇列滿了拒絕且不碰資料庫、忙碌的連線數不超過 worker 數。
 
 第 11 集起每個請求都帶 trace id。`otelhttp` 開出請求的 span（`cmd/api/main.go`），`telemetry.NewLogHandler` 把 `trace_id`、`span_id` 補進每一筆帶 context 的 `slog` 紀錄，`service.OrderService.Checkout` 多開一個子 span（`order.place`），`GET /metrics` 提供 Prometheus 指標：`http_requests_total` 與 `http_request_duration_seconds`，標籤是路由樣式，不是原始路徑。不需要外部 collector：`OTEL_TRACES_EXPORTER` 預設 `none`（只有 log 裡的 trace id），設 `stdout` 則把 span 以 JSON 印到 stderr。
-第 12 集起 API 會優雅關機。`SIGINT` 與 `SIGTERM`（`docker stop` 送的就是它）先關掉監聽，進行中的請求最多有 `SHUTDOWN_GRACE_SECONDS`（預設 25）秒做完（`lifecycle.Serve`），之後才停止背景 goroutine 並等它們結束（`lifecycle.Group`），所以排在搶購佇列裡的客人仍會被服務；然後才關 Redis、連線池並沖出最後的 span。`Dockerfile` 是多階段、最後一階 `FROM scratch`（靜態二進位、`CGO_ENABLED=0`、沒有 shell、沒有 `HEALTHCHECK`）；`docker compose --profile app up --build` 會跑整個商店，`docker stop` 時日誌應出現 `stop signal received: requests drained, workers stopped`。
 
 證明是 `go test ./internal/handler -run "TraceID|Metrics"` 與 `go test ./internal/platform/telemetry`：請求紀錄裡的 trace id 和 handler 看到的相同，`/metrics` 看得到新指標。
+
+第 12 集起 API 會優雅關機。`SIGINT` 與 `SIGTERM`（`docker stop` 送的就是它）先關掉監聽，進行中的請求最多有 `SHUTDOWN_GRACE_SECONDS`（預設 25）秒做完（`lifecycle.Serve`），之後才停止背景 goroutine 並等它們結束（`lifecycle.Group`），所以排在搶購佇列裡的客人仍會被服務；然後才關 Redis、連線池並沖出最後的 span。`Dockerfile` 是多階段、最後一階 `FROM scratch`（靜態二進位、`CGO_ENABLED=0`、沒有 shell、沒有 `HEALTHCHECK`）；`docker compose --profile app up --build` 會跑整個商店，`docker stop` 時日誌應出現 `stop signal received: requests drained, workers stopped`。
+
+證明是 `go test ./internal/platform/lifecycle ./cmd/api`：停止訊號到達時還在跑的請求會先收到回應，`Serve` 才回來；新連線被拒絕；寬限時間用完就砍掉剩下的；排在忙碌搶購 worker 後面的買家仍會被服務。另有一個測試把 `Dockerfile` 當文字讀（不會建置 image）。

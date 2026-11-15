@@ -12,7 +12,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-# CGO_ENABLED=0: a fully static binary with no libc, which is the only kind that runs on scratch.
+# CGO_ENABLED=0: a fully static binary with no libc, which is the only kind that runs on scratch. golang:alpine has no C
+# compiler, so cgo would be off anyway; the flag says it out loud so the build does not depend on the base image.
 # -trimpath removes local build paths from the binary; -s -w drop the symbol and debug tables.
 # Migrations are embedded (db/migrations.go), so the binary needs no files next to it.
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
@@ -29,6 +30,7 @@ USER 65532:65532
 EXPOSE 8080
 
 # No HEALTHCHECK on purpose: scratch has no shell and no curl to run one with. Let the platform probe GET /healthz.
-# Exec form (a JSON array) makes /api PID 1, so docker stop's SIGTERM reaches the Go program. The shell form
-# ("ENTRYPOINT /api") would start /bin/sh as PID 1, which scratch does not have, and the signal would go nowhere useful.
+# Exec form (a JSON array) makes /api PID 1, so docker stop's SIGTERM reaches the Go program directly. (The shell form
+# "ENTRYPOINT /api" runs /bin/sh -c, which scratch does not have: the container would not even start. On an image that
+# does have a shell, the shell form would make sh PID 1, and sh does not necessarily pass SIGTERM on.)
 ENTRYPOINT ["/api"]

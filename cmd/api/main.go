@@ -207,6 +207,8 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	logger.Info("api listening", "port", port)
+	// After the first signal, give Ctrl+C back its default meaning: a second one then ends the process even mid-drain.
+	go func() { <-ctx.Done(); stop() }()
 
 	// Blocks until a signal arrives, then: refuse new connections, let running requests finish, stop the workers.
 	// The defers after this return close Redis and the pool, and flush the last spans.
