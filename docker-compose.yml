@@ -26,5 +26,25 @@ services:
       timeout: 3s
       retries: 15
 
+  # The shop itself, built from the Dockerfile. Off by default (a profile), so `docker compose up` stays database-only:
+  # run it with `docker compose --profile app up --build`.
+  api:
+    profiles: ["app"]
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://goshop:goshop@postgres:5432/goshop?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      ECPAY_SANDBOX: "1" # public test credentials, never real money
+      SHUTDOWN_GRACE_SECONDS: "25"
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    # docker stop sends SIGTERM, waits this long, then SIGKILL. The app's own budget must fit inside it: 25 s drain + up to 5 s span flush (worker stop time is on top).
+    stop_grace_period: 40s
+
 volumes:
   pgdata:
