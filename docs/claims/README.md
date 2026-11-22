@@ -4,6 +4,10 @@
 
 Every statement the video scripts make about this repo has a numbered entry here. Each entry carries a check that anyone can run.
 
+口播的逐字稿在 `docs/transcripts/`，每一段的行尾標了它對應的主張編號。逐字稿由影片分鏡產生，不是手寫的。
+
+The transcripts are in `docs/transcripts/`; each paragraph ends with the ids of the claims it relies on. They are generated from the video storyboard, not written by hand.
+
 ## 怎麼跑 / How to run
 
 ```
