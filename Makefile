@@ -5,7 +5,7 @@ REDIS_URL ?= redis://localhost:6379/0
 
 OAPI_CODEGEN_VERSION := v2.8.2
 
-.PHONY: db-up db-down run sqlc api test test-integration
+.PHONY: db-up db-down run sqlc api test test-integration claims
 
 db-up:
 	docker compose up -d --wait
@@ -30,3 +30,8 @@ test:
 
 test-integration:
 	go test -tags=integration ./...
+
+# Check every claim the video scripts make (docs/claims/*.json) against the code at its tag.
+# Claims that need Docker are reported as SKIP when Docker is not running.
+claims:
+	go run ./cmd/claimcheck
