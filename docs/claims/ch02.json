@@ -1,0 +1,430 @@
+{
+  "chapter": "ch02",
+  "title": "商品要存起來",
+  "tag": "ep02",
+  "claims": [
+    {
+      "id": "C2-1",
+      "kind": "repo",
+      "claim": "tag `ep01` 的商品寫死在程式碼裡：`MemoryProducts` 內建 3 件商品，只有 `List` 一個方法。`ep01` 還沒有 `db/migrations`，`go.mod` 也沒有 pgx。資料庫是這一章新增的。",
+      "claim_en": "At tag `ep01` the products are hard-coded: `MemoryProducts` holds 3 built-in products and has one method, `List`. `ep01` has no `db/migrations` and `go.mod` does not list pgx. The database is added in this chapter.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-c", "-E", "ID: [0-9], Name:", "ep01", "--", "internal/repository/product.go"],
+          "output_contains": "internal/repository/product.go:3"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-c", "-F", "func (r *MemoryProducts)", "ep01", "--", "internal/repository/product.go"],
+          "output_contains": "internal/repository/product.go:1"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-F", "func (r *MemoryProducts) List(", "ep01", "--", "internal/repository/product.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep01:db/migrations/00001_create_products.sql"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-e", "pgx", "ep01", "--", "go.mod"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep02:db/migrations/00001_create_products.sql"]
+        }
+      ]
+    },
+    {
+      "id": "C2-2",
+      "kind": "repo",
+      "claim": "第一個 migration `00001_create_products.sql` 建立 `products` 資料表，有 4 個欄位：`id`、`name`、`price_twd`、`created_at`。`price_twd` 有 `CHECK (price_twd >= 0)`，也就是價格不能小於 0。檔案有 goose 的 Up 與 Down 兩段，Down 是 `DROP TABLE products`。",
+      "claim_en": "The first migration, `00001_create_products.sql`, creates the `products` table with 4 columns: `id`, `name`, `price_twd`, `created_at`. `price_twd` has `CHECK (price_twd >= 0)`, so a price cannot be below 0. The file has goose Up and Down sections, and Down is `DROP TABLE products`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "db/migrations/00001_create_products.sql",
+          "pattern": "CREATE TABLE products \\(\\n    id         integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\\n    name       text        NOT NULL,\\n    price_twd  integer     NOT NULL CHECK \\(price_twd >= 0\\),\\n    created_at timestamptz NOT NULL DEFAULT now\\(\\)\\n\\);"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00001_create_products.sql",
+          "text": "-- +goose Up"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00001_create_products.sql",
+          "text": "-- +goose Down\nDROP TABLE products;"
+        }
+      ]
+    },
+    {
+      "id": "C2-3",
+      "kind": "repo",
+      "claim": "第二個 migration `00002_seed_products.sql` 寫入 3 件商品，價格是 2490、1290、5990，和 tag `ep01` 寫死的 3 件商品價格相同。測試 `TestProducts_List_ReturnsSeededProducts` 證明：新資料庫跑完 migration 後，`List` 依 id 回傳這 3 件商品。",
+      "claim_en": "The second migration, `00002_seed_products.sql`, inserts 3 products priced 2490, 1290 and 5990, the same prices as the 3 hard-coded products at tag `ep01`. The test `TestProducts_List_ReturnsSeededProducts` proves that on a fresh database, after the migrations, `List` returns these 3 products ordered by id.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "db/migrations/00002_seed_products.sql",
+          "text": "('機械式鍵盤', 2490)"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00002_seed_products.sql",
+          "text": "('人體工學滑鼠', 1290)"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00002_seed_products.sql",
+          "text": "('27 吋螢幕', 5990)"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-F", "PriceTWD: 2490", "ep01", "--", "internal/repository/product.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-F", "PriceTWD: 1290", "ep01", "--", "internal/repository/product.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-F", "PriceTWD: 5990", "ep01", "--", "internal/repository/product.go"]
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestProducts_List_ReturnsSeededProducts$", "-v", "./internal/repository"],
+          "output_contains": "--- PASS: TestProducts_List_ReturnsSeededProducts"
+        }
+      ]
+    },
+    {
+      "id": "C2-4",
+      "kind": "repo",
+      "claim": "migration 檔案編進執行檔：`db/migrations.go` 用 `//go:embed migrations/*.sql`，把檔案放進 `embed.FS` 型別的 `Migrations`。`postgres.Migrate` 用 goose 的 provider 執行 `Up`，`cmd/api/main.go` 在啟動時呼叫它。",
+      "claim_en": "The migration files are compiled into the binary: `db/migrations.go` uses `//go:embed migrations/*.sql` to put them in `Migrations`, an `embed.FS`. `postgres.Migrate` runs `Up` through a goose provider, and `cmd/api/main.go` calls it at startup.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "db/migrations.go",
+          "text": "//go:embed migrations/*.sql\nvar Migrations embed.FS"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "fs.Sub(db.Migrations, \"migrations\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "goose.NewProvider(goose.DialectPostgres, sqlDB, dir)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "provider.Up(ctx)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "postgres.Migrate(ctx, pool)"
+        },
+        {
+          "type": "run",
+          "cmd": ["go", "build", "./cmd/api"]
+        }
+      ]
+    },
+    {
+      "id": "C2-5",
+      "kind": "repo",
+      "claim": "查詢寫在 `db/queries/products.sql`，第一行註解 `-- name: ListProducts :many`。`sqlc.yaml` 讀 `db/migrations` 當資料表定義，輸出到 `internal/repository/dbgen`。`make sqlc` 用 Docker 執行 sqlc 1.31.1。產生的 `products.sql.go` 標明 `Code generated by sqlc. DO NOT EDIT.`，並且在 tag `ep02` 裡。它有 `ListProductsRow`（`ID`、`Name`、`PriceTwd` 三個欄位）和 `ListProducts(ctx)`。",
+      "claim_en": "The query is in `db/queries/products.sql` with the first-line comment `-- name: ListProducts :many`. `sqlc.yaml` reads `db/migrations` as the schema and writes to `internal/repository/dbgen`. `make sqlc` runs sqlc 1.31.1 in Docker. The generated `products.sql.go` is marked `Code generated by sqlc. DO NOT EDIT.` and is committed at tag `ep02`. It has `ListProductsRow` (fields `ID`, `Name`, `PriceTwd`) and `ListProducts(ctx)`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "db/queries/products.sql",
+          "text": "-- name: ListProducts :many\nSELECT id, name, price_twd\nFROM products\nORDER BY id;"
+        },
+        {
+          "type": "contains",
+          "file": "sqlc.yaml",
+          "text": "schema: db/migrations"
+        },
+        {
+          "type": "contains",
+          "file": "sqlc.yaml",
+          "text": "queries: db/queries"
+        },
+        {
+          "type": "contains",
+          "file": "sqlc.yaml",
+          "text": "out: internal/repository/dbgen"
+        },
+        {
+          "type": "contains",
+          "file": "Makefile",
+          "text": "SQLC_VERSION := 1.31.1"
+        },
+        {
+          "type": "contains",
+          "file": "Makefile",
+          "text": "docker run --rm -v \"$(CURDIR):/src\" -w /src sqlc/sqlc:$(SQLC_VERSION) generate"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/dbgen/products.sql.go",
+          "text": "// Code generated by sqlc. DO NOT EDIT."
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/dbgen/products.sql.go",
+          "text": "SELECT id, name, price_twd\nFROM products\nORDER BY id\n"
+        },
+        {
+          "type": "matches",
+          "file": "internal/repository/dbgen/products.sql.go",
+          "pattern": "type ListProductsRow struct \\{\\n\\tID       int32\\n\\tName     string\\n\\tPriceTwd int32\\n\\}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/dbgen/products.sql.go",
+          "text": "func (q *Queries) ListProducts(ctx context.Context) ([]ListProductsRow, error)"
+        }
+      ]
+    },
+    {
+      "id": "C2-6",
+      "kind": "repo",
+      "claim": "`repository.Products` 包住 sqlc 產生的 `dbgen.Queries`：`NewProducts` 收一個 `dbgen.DBTX`，`List` 呼叫 `ListProducts`，再把 `ListProductsRow` 轉成 `repository.Product`。`internal/service` 與 `internal/handler` 都沒有出現 `dbgen`。",
+      "claim_en": "`repository.Products` wraps the sqlc-generated `dbgen.Queries`: `NewProducts` takes a `dbgen.DBTX`, and `List` calls `ListProducts` and converts each `ListProductsRow` into a `repository.Product`. Neither `internal/service` nor `internal/handler` mentions `dbgen`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "type Product struct {\n\tID       int\n\tName     string\n\tPriceTWD int\n}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "func NewProducts(conn dbgen.DBTX) *Products"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "rows, err := r.q.ListProducts(ctx)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "Product{ID: int(row.ID), Name: row.Name, PriceTWD: int(row.PriceTwd)}"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-e", "dbgen", "ep02", "--", "internal/service", "internal/handler"],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C2-7",
+      "kind": "repo",
+      "claim": "從 tag `ep01` 到 tag `ep02`，`internal/service` 與 `internal/handler` 的檔案完全沒有改動。`ProductStore` 介面宣告在 `service`，只有 `List` 一個方法。記憶體版 `MemoryProducts` 和資料庫版 `Products` 都有 `List`。`cmd/api/main.go` 的接線，從 `repository.NewMemoryProducts()` 換成 `repository.NewProducts(pool)`。",
+      "claim_en": "From tag `ep01` to tag `ep02`, the files under `internal/service` and `internal/handler` are unchanged. The `ProductStore` interface is declared in `service` and has one method, `List`. Both the in-memory `MemoryProducts` and the database-backed `Products` have `List`. The wiring in `cmd/api/main.go` changes from `repository.NewMemoryProducts()` to `repository.NewProducts(pool)`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": ["git", "diff", "--quiet", "ep01", "ep02", "--", "internal/service", "internal/handler"]
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/product.go",
+          "pattern": "type ProductStore interface \\{\\n\\tList\\(ctx context.Context\\) \\(\\[\\]repository.Product, error\\)\\n\\}"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-F", "func (r *MemoryProducts) List(", "ep01", "--", "internal/repository/product.go"]
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "func (r *Products) List(ctx context.Context)"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-F", "repo := repository.NewMemoryProducts()", "ep01", "--", "cmd/api/main.go"]
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "repo := repository.NewProducts(pool)"
+        },
+        {
+          "type": "run",
+          "cmd": ["go", "build", "./..."]
+        }
+      ]
+    },
+    {
+      "id": "C2-8",
+      "kind": "repo",
+      "claim": "`postgres.Open` 用 `pgxpool.New` 建立連線池，馬上呼叫 `Ping`。`Ping` 失敗時，`Open` 先關閉連線池，再回傳錯誤。所以 `DATABASE_URL` 錯誤時，`Open` 在啟動階段就回傳錯誤。",
+      "claim_en": "`postgres.Open` creates the pool with `pgxpool.New` and calls `Ping` right away. If `Ping` fails, `Open` closes the pool and returns an error. So a wrong `DATABASE_URL` makes `Open` return an error at startup.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/platform/postgres/postgres.go",
+          "pattern": "pool, err := pgxpool.New\\(ctx, url\\)\\n\\tif err != nil \\{\\n\\t\\treturn nil, fmt.Errorf\\(\"create pool: %w\", err\\)\\n\\t\\}\\n\\tif err := pool.Ping\\(ctx\\); err != nil \\{\\n\\t\\tpool.Close\\(\\)\\n\\t\\treturn nil, fmt.Errorf\\(\"ping database: %w\", err\\)\\n\\t\\}"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "pool, err := postgres.Open\\(ctx, dbURL\\)\\n\\tif err != nil \\{\\n\\t\\treturn err\\n\\t\\}"
+        }
+      ]
+    },
+    {
+      "id": "C2-9",
+      "kind": "repo",
+      "claim": "`main` 先建立 `logger`，再呼叫 `run`；`run` 回傳 `error`；`run` 回傳錯誤之後，`main` 才記錄錯誤並呼叫 `os.Exit(1)`。`cmd/api/main.go` 裡只有這 1 處 `os.Exit(1)`。連線池用 `defer pool.Close()` 關閉，所以 `run` 正常回傳時，`pool.Close()` 會執行。",
+      "claim_en": "`main` creates a `logger` and then calls `run`; `run` returns an `error`; only after `run` has returned an error does `main` log it and call `os.Exit(1)`. There is exactly 1 `os.Exit(1)` in `cmd/api/main.go`. The pool is closed with `defer pool.Close()`, so it runs when `run` returns normally.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "if err := run\\(logger\\); err != nil \\{\\n\\t\\tlogger.Error\\(\"api stopped\", \"err\", err\\)\\n\\t\\tos.Exit\\(1\\)\\n\\t\\}"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "func run(logger *slog.Logger) error {"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "defer pool.Close()"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-c", "-F", "os.Exit(1)", "ep02", "--", "cmd/api/main.go"],
+          "output_contains": "cmd/api/main.go:1"
+        }
+      ]
+    },
+    {
+      "id": "C2-10",
+      "kind": "repo",
+      "claim": "從 handler 到資料庫，每個會用到資料庫的函式，第一個參數都是 `ctx`：`postgres.Open`、`postgres.Migrate`、`ProductService.List`、`Products.List`、sqlc 產生的 `ListProducts`。handler 呼叫 `products.List(req.Context())`，把請求的 context 傳下去。",
+      "claim_en": "From the handler down to the database, every function that touches the database takes `ctx` as its first parameter: `postgres.Open`, `postgres.Migrate`, `ProductService.List`, `Products.List`, and the sqlc-generated `ListProducts`. The handler calls `products.List(req.Context())`, passing the request's context down.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "func Open(ctx context.Context, url string)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "func Migrate(ctx context.Context, pool *pgxpool.Pool) error"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/product.go",
+          "text": "func (s *ProductService) List(ctx context.Context)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "func (r *Products) List(ctx context.Context)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/dbgen/products.sql.go",
+          "text": "func (q *Queries) ListProducts(ctx context.Context)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "products.List(req.Context())"
+        }
+      ]
+    },
+    {
+      "id": "C2-11",
+      "kind": "repo",
+      "claim": "整合測試檔 `product_integration_test.go` 第一行是 `//go:build integration`，並用 testcontainers 啟動 `postgres:17-alpine` 容器。不加 `-tags=integration` 時，`go test ./internal/repository` 不會編進這個檔案，輸出 `no test files`。",
+      "claim_en": "The first line of the integration test file `product_integration_test.go` is `//go:build integration`, and it starts a `postgres:17-alpine` container with testcontainers. Without `-tags=integration`, `go test ./internal/repository` does not compile the file and prints `no test files`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/repository/product_integration_test.go",
+          "pattern": "^//go:build integration\\n"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product_integration_test.go",
+          "text": "tcpostgres.Run(ctx, \"postgres:17-alpine\","
+        },
+        {
+          "type": "run",
+          "cmd": ["go", "test", "-count=1", "./internal/repository"],
+          "output_contains": "no test files"
+        }
+      ]
+    },
+    {
+      "id": "C2-12",
+      "kind": "repo",
+      "claim": "測試 `TestProducts_SurviveReconnect` 證明商品存在資料庫裡：用第一個連線池跑 migration 並新增 1 件商品，關閉第一個連線池，再開第二個連線池並再跑一次 migration。第二個連線池查到 4 件商品，第 4 件是新增的 `USB-C hub`。",
+      "claim_en": "The test `TestProducts_SurviveReconnect` proves the products live in the database: it runs the migrations and inserts 1 product through the first pool, closes the first pool, opens a second pool and runs the migrations again. The second pool reads 4 products, and the 4th is the inserted `USB-C hub`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/product_integration_test.go",
+          "text": "INSERT INTO products (name, price_twd) VALUES ($1, $2)\", \"USB-C hub\", 890"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product_integration_test.go",
+          "text": "first.Close()"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product_integration_test.go",
+          "text": "postgres.Migrate(ctx, second)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product_integration_test.go",
+          "text": "len(got) != 4 || got[3].Name != \"USB-C hub\""
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestProducts_SurviveReconnect$", "-v", "./internal/repository"],
+          "output_contains": "--- PASS: TestProducts_SurviveReconnect"
+        }
+      ]
+    },
+    {
+      "id": "X2-1",
+      "kind": "reference",
+      "claim": "C# 的 Entity Framework Core 先寫 C# 的模型類別和 `DbContext`，migration 從模型的變化產生。go-shop 的 migration 是直接寫的 SQL 檔。",
+      "claim_en": "In C#, Entity Framework Core starts from C# model classes and a `DbContext`, and migrations are generated from changes to the model. go-shop's migrations are hand-written SQL files.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/",
+        "https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/"
+      ]
+    }
+  ]
+}

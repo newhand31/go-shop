@@ -1,0 +1,367 @@
+{
+  "chapter": "ch08",
+  "title": "信沒寄出",
+  "tag": "ep08",
+  "claims": [
+    {
+      "id": "C8-1",
+      "kind": "repo",
+      "claim": "tag `ep07` 的程式碼還沒有 outbox：沒有 `internal/repository/outbox.go`，沒有 `internal/service/outbox.go`，`orders.go` 裡也沒有 `outbox`。這三個檔案或寫法都是這一章（tag `ep08`）新增的。",
+      "claim_en": "The code at tag `ep07` has no outbox yet: there is no `internal/repository/outbox.go`, no `internal/service/outbox.go`, and `orders.go` does not mention `outbox`. All three are added in this chapter (tag `ep08`).",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:internal/repository/outbox.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:internal/service/outbox.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-i", "-e", "outbox", "ep07", "--", "internal/repository/orders.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep08:internal/repository/outbox.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep08:internal/service/outbox.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-e", "InsertOutbox", "ep08", "--", "internal/repository/orders.go"]
+        }
+      ]
+    },
+    {
+      "id": "C8-2",
+      "kind": "repo",
+      "claim": "`Orders.Place` 在同一個交易裡，用同一個 `q`，先寫訂單與訂單明細，再呼叫 `q.InsertOutbox` 寫一列 outbox，最後才 `tx.Commit`。`orders.go` 沒有寄信的呼叫：裡面沒有 `smtp`、`Mailer`、`SendOrderConfirmation` 或 `.Send...(` 這類字，也沒有 import 任何 `net/` 套件或 `service` 套件。測試 `TestOutbox_PlaceWritesOneRowWithTheOrder` 證明下一張單，outbox 剛好多一列，主題是 `order_confirmation`。",
+      "claim_en": "`Orders.Place` writes the order and its lines, then calls `q.InsertOutbox` on the same `q` in the same transaction, and only then calls `tx.Commit`. `orders.go` contains no mail call: it has none of `smtp`, `Mailer`, `SendOrderConfirmation` or a `.Send...(` call, and it imports no `net/` package and no `service` package. The test `TestOutbox_PlaceWritesOneRowWithTheOrder` proves that placing one order leaves exactly one outbox row with the topic `order_confirmation`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/repository/orders.go",
+          "pattern": "InsertOrderLine\\([\\s\\S]*q\\.InsertOutbox\\(ctx, dbgen\\.InsertOutboxParams\\{Topic: TopicOrderConfirmation, Payload: payload\\}\\)[\\s\\S]*tx\\.Commit\\(ctx\\)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox.go",
+          "text": "const TopicOrderConfirmation = \"order_confirmation\""
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-i", "-E", "smtp|mailer|SendOrderConfirmation|\\.Send[A-Za-z]*\\(|net/mail", "ep08", "--", "internal/repository/orders.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-E", "\"net/|internal/service\"", "ep08", "--", "internal/repository/orders.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOutbox_PlaceWritesOneRowWithTheOrder$", "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOutbox_PlaceWritesOneRowWithTheOrder"
+        }
+      ]
+    },
+    {
+      "id": "C8-3",
+      "kind": "repo",
+      "claim": "資料表 `outbox` 有 8 個欄位：`id`、`topic`、`payload`（jsonb）、`attempts`（預設 0）、`next_attempt_at`、`sent_at`、`last_error`、`created_at`。另有一個只收未寄出列的索引 `outbox_due_idx`。",
+      "claim_en": "The `outbox` table has 8 columns: `id`, `topic`, `payload` (jsonb), `attempts` (default 0), `next_attempt_at`, `sent_at`, `last_error`, `created_at`. A partial index `outbox_due_idx` covers only unsent rows.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "db/migrations/00005_add_outbox.sql",
+          "pattern": "CREATE TABLE outbox \\(\\n    id +bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\\n    topic +text +NOT NULL,\\n    payload +jsonb +NOT NULL,\\n    attempts +integer +NOT NULL DEFAULT 0,\\n    next_attempt_at +timestamptz NOT NULL DEFAULT now\\(\\),\\n    sent_at +timestamptz,\\n    last_error +text,\\n    created_at +timestamptz NOT NULL DEFAULT now\\(\\)\\n\\);"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00005_add_outbox.sql",
+          "text": "CREATE INDEX outbox_due_idx ON outbox (next_attempt_at, id) WHERE sent_at IS NULL;"
+        }
+      ]
+    },
+    {
+      "id": "C8-4",
+      "kind": "repo",
+      "claim": "交易的 `Commit` 一定失敗時，下一張單之後，`outbox` 與 `orders` 都是 0 列，商品庫存回到原本的 10。測試 `TestOutbox_RolledBackOrderLeavesNoOutboxRow` 證明。",
+      "claim_en": "When the transaction's `Commit` always fails, after placing an order `outbox` and `orders` both have 0 rows and the product stock is back to its original 10. The test `TestOutbox_RolledBackOrderLeavesNoOutboxRow` proves it.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox_integration_test.go",
+          "text": "func (f failingCommit) Commit(ctx context.Context) error {"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOutbox_RolledBackOrderLeavesNoOutboxRow$", "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOutbox_RolledBackOrderLeavesNoOutboxRow"
+        }
+      ]
+    },
+    {
+      "id": "C8-5",
+      "kind": "repo",
+      "claim": "`Mailer` 介面宣告在使用它的 `service` 套件，只有一個方法 `SendOrderConfirmation`。`cmd/api/main.go` 的 `logMailer` 滿足它，沒有 `implements`，並有一行編譯期檢查。`logMailer` 只寫一行日誌，不寄信：整個 tag `ep08` 的程式碼沒有 import `net/smtp`。",
+      "claim_en": "The `Mailer` interface is declared in the `service` package that uses it and has one method, `SendOrderConfirmation`. `logMailer` in `cmd/api/main.go` satisfies it with no `implements`, and a compile-time assertion checks that. `logMailer` only writes a log line and sends no mail: the code at tag `ep08` does not import `net/smtp`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/outbox.go",
+          "pattern": "type Mailer interface \\{\\n\\tSendOrderConfirmation\\(.*\\n\\}"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "_ service\\.Mailer\\s+= logMailer\\{\\}"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "func (m logMailer) SendOrderConfirmation("
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "m.logger.Info(\"would send order confirmation\""
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-e", "net/smtp", "ep08"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["go", "build", "./..."]
+        }
+      ]
+    },
+    {
+      "id": "C8-6",
+      "kind": "repo",
+      "claim": "撈信的查詢 `ClaimOutbox` 只選 `sent_at IS NULL`、`attempts` 小於上限、`next_attempt_at` 已到的列，依 `id` 排序、一次最多 `LIMIT` 列，結尾是 `FOR UPDATE SKIP LOCKED`。",
+      "claim_en": "The query `ClaimOutbox` selects only rows with `sent_at IS NULL`, `attempts` below the cap and `next_attempt_at` already due, ordered by `id` and limited by `LIMIT`, and it ends with `FOR UPDATE SKIP LOCKED`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "db/queries/outbox.sql",
+          "pattern": "-- name: ClaimOutbox :many\\n.*\\nSELECT id, topic, payload, attempts FROM outbox\\nWHERE sent_at IS NULL AND attempts < \\$1 AND next_attempt_at <= now\\(\\)\\nORDER BY id\\nLIMIT \\$2\\nFOR UPDATE SKIP LOCKED;"
+        }
+      ]
+    },
+    {
+      "id": "C8-7",
+      "kind": "repo",
+      "claim": "寄成功，`MarkOutboxSent` 寫入 `sent_at`、`attempts` 加 1、清掉 `last_error`。寄失敗，`MarkOutboxFailed` 讓 `attempts` 加 1、記下 `last_error`、把 `next_attempt_at` 往後推。預設等待時間從 1 秒起，每次加倍，上限 5 分鐘。測試 `TestExponentialBackoff` 檢查這些數值。",
+      "claim_en": "On success, `MarkOutboxSent` sets `sent_at`, adds 1 to `attempts` and clears `last_error`. On failure, `MarkOutboxFailed` adds 1 to `attempts`, records `last_error` and pushes `next_attempt_at` back. The default wait starts at 1 second, doubles each time and is capped at 5 minutes. The test `TestExponentialBackoff` checks the values.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "db/queries/outbox.sql",
+          "text": "UPDATE outbox SET sent_at = now(), attempts = attempts + 1, last_error = NULL WHERE id = $1;"
+        },
+        {
+          "type": "matches",
+          "file": "db/queries/outbox.sql",
+          "pattern": "-- name: MarkOutboxFailed :exec\\nUPDATE outbox\\nSET attempts = attempts \\+ 1,\\n    last_error = \\$2,\\n    next_attempt_at = now\\(\\) \\+ make_interval\\(secs => @backoff_secs::float8\\)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/outbox.go",
+          "text": "d := time.Second << (attempts - 1)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/outbox.go",
+          "text": "const maxWait = 5 * time.Minute"
+        },
+        {
+          "type": "run",
+          "cmd": ["go", "test", "-count=1", "-run", "^TestExponentialBackoff$", "-v", "./internal/service"],
+          "output_contains": "--- PASS: TestExponentialBackoff"
+        }
+      ]
+    },
+    {
+      "id": "C8-8",
+      "kind": "repo",
+      "claim": "`OutboxDispatcher.Run` 是阻塞的：它用 `time.Ticker` 定時工作，用 `select` 同時等 `ctx.Done()` 與 ticker，`ctx` 被取消就 `return`。`service/outbox.go` 裡沒有 `go func`，要不要放到背景由呼叫端決定。測試 `TestOutboxDispatcher_RunStopsWhenContextIsCancelled` 證明取消後 `Run` 在 2 秒內回來。",
+      "claim_en": "`OutboxDispatcher.Run` blocks: it works on a `time.Ticker`, uses `select` to wait on `ctx.Done()` and the ticker at once, and returns when `ctx` is cancelled. `service/outbox.go` contains no `go func`; the caller decides whether to run it in the background. The test `TestOutboxDispatcher_RunStopsWhenContextIsCancelled` proves `Run` returns within 2 seconds after cancel.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/outbox.go",
+          "pattern": "func \\(d \\*OutboxDispatcher\\) Run\\(ctx context\\.Context\\) \\{\\n\\tticker := time\\.NewTicker\\(d\\.cfg\\.Interval\\)\\n\\tdefer ticker\\.Stop\\(\\)\\n\\tfor \\{\\n\\t\\td\\.RunOnce\\(ctx\\)\\n\\t\\tselect \\{\\n\\t\\tcase <-ctx\\.Done\\(\\):\\n\\t\\t\\treturn\\n\\t\\tcase <-ticker\\.C:"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-e", "go func", "ep08", "--", "internal/service/outbox.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go", "test", "-count=1",
+            "-run", "^TestOutboxDispatcher_RunStopsWhenContextIsCancelled$", "-v", "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestOutboxDispatcher_RunStopsWhenContextIsCancelled"
+        }
+      ]
+    },
+    {
+      "id": "C8-9",
+      "kind": "repo",
+      "claim": "`cmd/api/main.go` 用 `go func()` 啟動 worker，goroutine 結束前執行 `defer close(workerDone)`。`run` 函式在 `defer pool.Close()` 之後，用 `defer` 先呼叫 `stopWorker()`、再等 `<-workerDone`。`defer` 後進先出，所以這段先於 `pool.Close()` 執行：worker 在連線池關閉之前結束。",
+      "claim_en": "`cmd/api/main.go` starts the worker with `go func()`, and the goroutine runs `defer close(workerDone)` before it exits. After `defer pool.Close()`, the `run` function defers a call to `stopWorker()` followed by `<-workerDone`. Deferred calls run last-in first-out, so this block runs before `pool.Close()`: the worker ends before the connection pool closes.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "workerCtx, stopWorker := context\\.WithCancel\\(ctx\\)\\n\\tworkerDone := make\\(chan struct\\{\\}\\)\\n\\tgo func\\(\\) \\{\\n\\t\\tdefer close\\(workerDone\\)\\n\\t\\tdispatcher\\.Run\\(workerCtx\\)\\n\\t\\}\\(\\)"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "defer pool\\.Close\\(\\)[\\s\\S]*defer func\\(\\) \\{\\n\\t\\tstopWorker\\(\\)\\n\\t\\t<-workerDone\\n\\t\\}\\(\\)"
+        }
+      ]
+    },
+    {
+      "id": "C8-10",
+      "kind": "repo",
+      "claim": "`Outbox.Dispatch` 用 `context.WithoutCancel(ctx)` 取得 `recordCtx`，寫入「已寄出」與「失敗」的結果、提交交易，用的都是 `recordCtx`，不是 `ctx`；`recordCtx` 是 `context.WithoutCancel` 取得的另一個 context，不隨 `ctx` 取消。原始碼註解說明用意：關機時這些結果也要寫進去。這一條只說程式碼的寫法，沒有測試證明關機時的行為。",
+      "claim_en": "`Outbox.Dispatch` derives `recordCtx` with `context.WithoutCancel(ctx)` and uses it for writing the sent and failed outcomes and for committing the transaction, not `ctx`; `recordCtx` is another context from `context.WithoutCancel` that is not cancelled with `ctx`. A source comment gives the intent: the outcomes must be written even during shutdown. This claim covers how the code is written only; no test proves the behavior during shutdown.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox.go",
+          "text": "recordCtx := context.WithoutCancel(ctx)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox.go",
+          "text": "q.MarkOutboxSent(recordCtx, row.ID)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox.go",
+          "text": "q.MarkOutboxFailed(recordCtx,"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox.go",
+          "text": "tx.Commit(recordCtx)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox.go",
+          "text": "Recording an outcome must survive a shutdown"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-E", "MarkOutboxSent(ctx|MarkOutboxFailed(ctx|tx.Commit(ctx", "ep08", "--", "internal/repository/outbox.go"],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C8-11",
+      "kind": "repo",
+      "claim": "寄信器前兩次失敗、第三次成功時，worker 會重試：寄信器被呼叫 3 次，`attempts` 是 3，`last_error` 被清掉，`sent_at` 有值。測試結束前先 `cancel()` 並等 `done`，確認 worker 真的停了才讀最後狀態。再跑一輪，寄信器沒有被呼叫第 4 次。測試 `TestOutbox_FailedSendIsRetriedUntilItWorks` 證明。",
+      "claim_en": "When the mailer fails twice and succeeds the third time, the worker retries: the mailer is called 3 times, `attempts` is 3, `last_error` is cleared and `sent_at` is set. The test calls `cancel()` and waits for `done` before it reads the final state, so the worker has really stopped. One more round does not call the mailer a 4th time. The test `TestOutbox_FailedSendIsRetriedUntilItWorks` proves it.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox_integration_test.go",
+          "text": "mailer := &flakyMailer{failures: 2}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox_integration_test.go",
+          "text": "<-done // the worker has really stopped before we look at the final state"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOutbox_FailedSendIsRetriedUntilItWorks$", "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOutbox_FailedSendIsRetriedUntilItWorks"
+        }
+      ]
+    },
+    {
+      "id": "C8-12",
+      "kind": "repo",
+      "claim": "預設最多嘗試 8 次，每次掃描最多 20 列，每 2 秒掃一次。寄信器永遠失敗、`MaxAttempts` 設成 3 時，跑 6 輪，寄信器只被呼叫 3 次，那一列沒有寄出，`last_error` 是 `smtp down`。測試 `TestOutbox_GivesUpAfterMaxAttemptsAndKeepsTheError` 證明。",
+      "claim_en": "By default the worker tries at most 8 times, takes at most 20 rows per scan and scans every 2 seconds. When the mailer always fails and `MaxAttempts` is 3, after 6 rounds the mailer has been called only 3 times, the row is unsent and `last_error` is `smtp down`. The test `TestOutbox_GivesUpAfterMaxAttemptsAndKeepsTheError` proves it.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/outbox.go",
+          "text": "c.Interval = 2 * time.Second"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/outbox.go",
+          "text": "c.BatchSize = 20"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/outbox.go",
+          "text": "c.MaxAttempts = 8"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox_integration_test.go",
+          "text": "for range 6 {"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOutbox_GivesUpAfterMaxAttemptsAndKeepsTheError$", "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOutbox_GivesUpAfterMaxAttemptsAndKeepsTheError"
+        }
+      ]
+    },
+    {
+      "id": "X8-1",
+      "kind": "reference",
+      "claim": "Go 的 `go` 陳述式啟動函式後，函式的回傳值會被丟棄，`go` 本身不回傳任何可以等待的東西。C# 的 `Task` 是一個物件，可以 `await`，也可以搭配 `CancellationToken` 取消。",
+      "claim_en": "After a Go `go` statement starts a function, the function's return values are discarded and the statement itself returns nothing to wait on. A C# `Task` is an object that can be awaited and cancelled with a `CancellationToken`.",
+      "sources": [
+        "https://go.dev/ref/spec#Go_statements",
+        "https://learn.microsoft.com/en-us/dotnet/standard/parallel-programming/task-cancellation"
+      ]
+    },
+    {
+      "id": "X8-2",
+      "kind": "reference",
+      "claim": "PostgreSQL 的 `FOR UPDATE SKIP LOCKED`：被其他交易鎖住的列會被跳過，不會等待。",
+      "claim_en": "PostgreSQL `FOR UPDATE SKIP LOCKED`: rows locked by other transactions are skipped instead of waited for.",
+      "sources": [
+        "https://www.postgresql.org/docs/current/sql-select.html"
+      ]
+    }
+  ]
+}

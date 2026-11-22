@@ -1,0 +1,432 @@
+{
+  "chapter": "ch13",
+  "title": "番外　踩坑合集",
+  "tag": "ep13-pitfalls",
+  "claims": [
+    {
+      "id": "C13-1",
+      "kind": "repo",
+      "claim": "這一章沒有新功能。新增的 `internal/pitfalls` 套件，商店的其他程式沒有 import 它。tag `ep12` 還沒有這個套件。",
+      "claim_en": "This chapter adds no feature. The new `internal/pitfalls` package is imported by no other code in the shop, and the code at tag `ep12` does not have it yet.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep12:internal/pitfalls/nilerror.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep13-pitfalls:internal/pitfalls/nilerror.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "go-shop/internal/pitfalls",
+            "ep13-pitfalls",
+            "--",
+            "*.go"
+          ],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C13-2",
+      "kind": "repo",
+      "claim": "`findBuggy` 宣告 `var err *NotFoundError`，沒找到商品時才指定值，最後一律 `return err`，所以商品 1 會回傳一個裝著 nil 指標的 `error`。`findFixed` 在沒有錯誤時寫 `return nil`。",
+      "claim_en": "`findBuggy` declares `var err *NotFoundError`, assigns it only when the product is missing, and always ends with `return err`, so product 1 yields an `error` that holds a nil pointer. `findFixed` writes `return nil` when there is nothing to report.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/nilerror.go",
+          "pattern": "func findBuggy\\(id int\\) error \\{\\n\\tvar err \\*NotFoundError.*\\n\\tif id != 1 \\{\\n\\t\\terr = &NotFoundError\\{ProductID: id\\}\\n\\t\\}\\n\\treturn err\\n\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/nilerror.go",
+          "pattern": "func findFixed\\(id int\\) error \\{\\n\\tif id != 1 \\{\\n\\t\\treturn &NotFoundError\\{ProductID: id\\}\\n\\t\\}\\n\\treturn nil\\n\\}"
+        }
+      ]
+    },
+    {
+      "id": "C13-3",
+      "kind": "repo",
+      "claim": "測試 `TestNilPointerInsideAnErrorIsNotNil` 證明：`findBuggy(1)` 回傳的 `error` 不是 nil，裡面裝的是 nil 的 `*NotFoundError`；`findFixed(1)` 回傳真正的 nil。",
+      "claim_en": "The test `TestNilPointerInsideAnErrorIsNotNil` proves that the `error` from `findBuggy(1)` is not nil and holds a nil `*NotFoundError`, while `findFixed(1)` returns a true nil.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestNilPointerInsideAnErrorIsNotNil$",
+            "-v",
+            "./internal/pitfalls"
+          ],
+          "output_contains": "--- PASS: TestNilPointerInsideAnErrorIsNotNil"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "typed, ok := err.(*NotFoundError); !ok || typed != nil"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "if err := findFixed(1); err != nil {"
+        }
+      ]
+    },
+    {
+      "id": "C13-4",
+      "kind": "repo",
+      "claim": "`NotFoundError` 帶一個 `ProductID`，`Error()` 回傳 `product N not found`。修法沒有改變真正的錯誤：商品 7 找不到時，`findBuggy` 與 `findFixed` 都回傳 `*NotFoundError`，`ProductID` 是 7。測試 `TestRealErrorsStillWork` 證明。",
+      "claim_en": "`NotFoundError` carries a `ProductID`, and `Error()` returns `product N not found`. The fix does not change real errors: for the missing product 7, both `findBuggy` and `findFixed` return a `*NotFoundError` whose `ProductID` is 7. The test `TestRealErrorsStillWork` proves it.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestRealErrorsStillWork$",
+            "-v",
+            "./internal/pitfalls"
+          ],
+          "output_contains": "--- PASS: TestRealErrorsStillWork"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/nilerror.go",
+          "text": "type NotFoundError struct{ ProductID int }"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/nilerror.go",
+          "text": "fmt.Sprintf(\"product %d not found\", e.ProductID)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "map[string]func(int) error{\"buggy\": findBuggy, \"fixed\": findFixed}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "nf.ProductID != 7"
+        }
+      ]
+    },
+    {
+      "id": "C13-5",
+      "kind": "repo",
+      "claim": "`go vet ./internal/pitfalls` 對這個套件沒有任何警告，結束碼是 0，包含 `findBuggy` 的那個坑。",
+      "claim_en": "`go vet ./internal/pitfalls` reports nothing for this package and exits 0, including the trap in `findBuggy`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "vet",
+            "./internal/pitfalls"
+          ]
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/nilerror.go",
+          "text": "\treturn err\n}"
+        }
+      ]
+    },
+    {
+      "id": "C13-6",
+      "kind": "repo",
+      "claim": "`go.mod` 寫 `go 1.27.0`。`counterNew` 在沒有 build 限制的檔案裡，三圈的迴圈把 `i` 放進 closure，呼叫結果是 0、1、2。`counterOld` 的程式碼一樣，但檔案第一行是 `//go:build go1.21`，呼叫結果是 3、3、3。兩個測試都通過。",
+      "claim_en": "`go.mod` says `go 1.27.0`. `counterNew` sits in a file with no build constraint; its three-iteration loop captures `i` in closures and they return 0, 1, 2. `counterOld` has the same code but its file starts with `//go:build go1.21`, and the closures return 3, 3, 3. Both tests pass.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "go.mod",
+          "pattern": "\\ngo 1\\.27\\.0\\n"
+        },
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/loopvar_old.go",
+          "pattern": "^//go:build go1\\.21\\n\\npackage pitfalls"
+        },
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/loopvar_new.go",
+          "pattern": "^package pitfalls"
+        },
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/loopvar_new.go",
+          "pattern": "for i := 0; i < n; i\\+\\+ \\{\\n\\t\\tfns = append\\(fns, func\\(\\) int \\{ return i \\}\\)\\n\\t\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/loopvar_old.go",
+          "pattern": "for i := 0; i < n; i\\+\\+ \\{\\n\\t\\tfns = append\\(fns, func\\(\\) int \\{ return i \\}\\)\\n\\t\\}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestEachIterationHasItsOwnLoopVariableSinceGo122$",
+            "-v",
+            "./internal/pitfalls"
+          ],
+          "output_contains": "--- PASS: TestEachIterationHasItsOwnLoopVariableSinceGo122"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestOneSharedLoopVariableBeforeGo122$",
+            "-v",
+            "./internal/pitfalls"
+          ],
+          "output_contains": "--- PASS: TestOneSharedLoopVariableBeforeGo122"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "[]int{0, 1, 2}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "[]int{3, 3, 3}"
+        }
+      ]
+    },
+    {
+      "id": "C13-7",
+      "kind": "repo",
+      "claim": "把 `go.mod` 的 `go 1.27.0` 改成 `go 1.21`，`counterNew` 的結果變成 `[3 3 3]`，測試 `TestEachIterationHasItsOwnLoopVariableSinceGo122` 失敗。",
+      "claim_en": "Changing `go 1.27.0` in `go.mod` to `go 1.21` makes `counterNew` return `[3 3 3]`, and the test `TestEachIterationHasItsOwnLoopVariableSinceGo122` fails.",
+      "checks": [
+        {
+          "type": "run",
+          "edit": {
+            "file": "go.mod",
+            "old": "\ngo 1.27.0\n",
+            "new": "\ngo 1.21\n"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestEachIterationHasItsOwnLoopVariableSinceGo122$",
+            "./internal/pitfalls"
+          ],
+          "exit": "nonzero",
+          "output_contains": "counterNew = [3 3 3]"
+        }
+      ]
+    },
+    {
+      "id": "C13-8",
+      "kind": "repo",
+      "claim": "`firstBuggy` 寫 `head := cart[:n]`，再 `append(head, extra)`。購物車 `[10 20 30 40]` 取前 2 件加 99，回傳 `[10 20 99]`，原本的購物車變成 `[10 20 99 40]`。測試 `TestAppendOnASubSliceOverwritesTheOriginal` 證明。",
+      "claim_en": "`firstBuggy` writes `head := cart[:n]` and then `append(head, extra)`. For the cart `[10 20 30 40]`, taking 2 items and adding 99 returns `[10 20 99]` and turns the original cart into `[10 20 99 40]`. The test `TestAppendOnASubSliceOverwritesTheOriginal` proves it.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/slices.go",
+          "pattern": "func firstBuggy\\(cart \\[\\]int, n, extra int\\) \\[\\]int \\{\\n\\thead := cart\\[:n\\]\\n\\treturn append\\(head, extra\\)\\n\\}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestAppendOnASubSliceOverwritesTheOriginal$",
+            "-v",
+            "./internal/pitfalls"
+          ],
+          "output_contains": "--- PASS: TestAppendOnASubSliceOverwritesTheOriginal"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "cart := []int{10, 20, 30, 40}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "want := []int{10, 20, 99, 40}"
+        }
+      ]
+    },
+    {
+      "id": "C13-9",
+      "kind": "repo",
+      "claim": "`firstFixed` 寫 `head := cart[:n:n]`，長度與容量都是 `n`。同樣的輸入回傳 `[10 20 99]`，原本的購物車維持 `[10 20 30 40]`。測試 `TestCappingTheCapacityKeepsTheOriginalSafe` 證明。",
+      "claim_en": "`firstFixed` writes `head := cart[:n:n]`, so length and capacity are both `n`. The same input returns `[10 20 99]` and the original cart stays `[10 20 30 40]`. The test `TestCappingTheCapacityKeepsTheOriginalSafe` proves it.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/pitfalls/slices.go",
+          "pattern": "func firstFixed\\(cart \\[\\]int, n, extra int\\) \\[\\]int \\{\\n\\thead := cart\\[:n:n\\]\\n\\treturn append\\(head, extra\\)\\n\\}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestCappingTheCapacityKeepsTheOriginalSafe$",
+            "-v",
+            "./internal/pitfalls"
+          ],
+          "output_contains": "--- PASS: TestCappingTheCapacityKeepsTheOriginalSafe"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "want := []int{10, 20, 30, 40}"
+        }
+      ]
+    },
+    {
+      "id": "C13-10",
+      "kind": "repo",
+      "claim": "`internal/pitfalls` 有 6 個測試，`go test ./internal/pitfalls` 全部通過。壞的版本與修好的版本並存：`findBuggy` 與 `findFixed`、`counterOld` 與 `counterNew`、`firstBuggy` 與 `firstFixed`。",
+      "claim_en": "`internal/pitfalls` has 6 tests and `go test ./internal/pitfalls` passes them all. Broken and fixed versions sit side by side: `findBuggy` and `findFixed`, `counterOld` and `counterNew`, `firstBuggy` and `firstFixed`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "func TestNilPointerInsideAnErrorIsNotNil("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "func TestRealErrorsStillWork("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "func TestEachIterationHasItsOwnLoopVariableSinceGo122("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "func TestOneSharedLoopVariableBeforeGo122("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "func TestAppendOnASubSliceOverwritesTheOriginal("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/pitfalls_test.go",
+          "text": "func TestCappingTheCapacityKeepsTheOriginalSafe("
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-c",
+            "-e",
+            "^func Test",
+            "ep13-pitfalls",
+            "--",
+            "internal/pitfalls/pitfalls_test.go"
+          ],
+          "output_contains": ":6"
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/nilerror.go",
+          "text": "func findBuggy("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/nilerror.go",
+          "text": "func findFixed("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/loopvar_old.go",
+          "text": "func counterOld("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/loopvar_new.go",
+          "text": "func counterNew("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/slices.go",
+          "text": "func firstBuggy("
+        },
+        {
+          "type": "contains",
+          "file": "internal/pitfalls/slices.go",
+          "text": "func firstFixed("
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "./internal/pitfalls"
+          ],
+          "output_contains": "ok  \tgithub.com/newhand31/go-shop/internal/pitfalls"
+        }
+      ]
+    },
+    {
+      "id": "X13-1",
+      "kind": "reference",
+      "claim": "Go 官方資料：interface 值是（型別，值）一對，裝著 nil 指標的 interface 不是 nil（Go FAQ）。Go 1.22 起，`for` 迴圈每一圈建立新的變數；是否採用新規則，由 `go.mod` 的 `go` 版本決定，也可以用 `//go:build` 行逐檔控制（Go 1.22 發行說明）。",
+      "claim_en": "Official Go sources: an interface value is a (type, value) pair, and an interface holding a nil pointer is not nil (Go FAQ). Since Go 1.22 each iteration of a `for` loop creates new variables; the `go` version in `go.mod` decides whether the new rule applies, and `//go:build` lines can decide per file (Go 1.22 release notes).",
+      "sources": [
+        "https://go.dev/doc/faq#nil_error",
+        "https://go.dev/doc/go1.22"
+      ]
+    },
+    {
+      "id": "X13-2",
+      "kind": "reference",
+      "claim": "Go 官方資料：slice 是陣列片段的描述，包含指向陣列的指標、長度與容量（Go 官方部落格「Go Slices: usage and internals」）。",
+      "claim_en": "Official Go source: a slice is a descriptor of an array segment, made of a pointer to the array, a length and a capacity (the Go blog post \"Go Slices: usage and internals\").",
+      "sources": [
+        "https://go.dev/blog/slices-intro"
+      ]
+    }
+  ]
+}

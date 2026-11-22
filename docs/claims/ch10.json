@@ -1,0 +1,638 @@
+{
+  "chapter": "ch10",
+  "title": "雙 11 打爆資料庫",
+  "tag": "ep10",
+  "claims": [
+    {
+      "id": "C10-1",
+      "kind": "repo",
+      "claim": "tag `ep09` 的程式碼還沒有搶購功能：沒有 `internal/service/flashsale.go`，也沒有 `internal/repository/flashsale.go`，也沒有 `OpenWithMaxConns`。`cmd/api/main.go` 用 `postgres.Open` 開資料庫連線池。這些是這一章新增的。",
+      "claim_en": "The code at tag `ep09` has no flash sale yet: no `internal/service/flashsale.go`, no `internal/repository/flashsale.go`, and no `OpenWithMaxConns`. `cmd/api/main.go` opens the database pool with `postgres.Open`. This chapter adds them.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep09:internal/service/flashsale.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep09:internal/repository/flashsale.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "OpenWithMaxConns",
+            "ep09",
+            "--"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "postgres.Open(ctx, dbURL)",
+            "ep09",
+            "--",
+            "cmd/api/main.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep10:internal/service/flashsale.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep10:internal/repository/flashsale.go"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C10-2",
+      "kind": "repo",
+      "claim": "Redis 預扣用一支 Lua 腳本：腳本裡先 `GET` 計數器，不夠就回傳 0，夠就 `DECRBY`，回傳 1；計數器不存在回傳 -1。`Reserve` 收到 -1 時回傳 `ErrSaleNotOpen`，收到 1 時才算預扣成功。Redis 一次執行一支腳本，檢查和扣除之間沒有別的指令。測試 `TestReservations_Integration_ReserveIsAtomic` 讓 50 個 client 搶 5 個單位，剛好 5 個成功。",
+      "claim_en": "The Redis reservation is one Lua script: it does `GET` on the counter, returns 0 if there is not enough, otherwise does `DECRBY` and returns 1; a missing counter returns -1. `Reserve` returns `ErrSaleNotOpen` on -1 and counts only 1 as a successful reservation. Redis runs one script at a time, so no other command runs between the check and the subtraction. The test `TestReservations_Integration_ReserveIsAtomic` lets 50 clients race for 5 units, and exactly 5 win.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "local left = redis.call('GET', KEYS[1])"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "if not left then return -1 end"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "if tonumber(left) < tonumber(ARGV[1]) then return 0 end"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "redis.call('DECRBY', KEYS[1], ARGV[1])"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "return 1`)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "return false, fmt.Errorf(\"product %d: %w\", productID, ErrSaleNotOpen)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "return res == 1, nil"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_integration_test.go",
+          "text": "const stock, clients = 5, 50"
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestReservations_Integration_ReserveIsAtomic$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestReservations_Integration_ReserveIsAtomic"
+        }
+      ]
+    },
+    {
+      "id": "C10-3",
+      "kind": "repo",
+      "claim": "Redis 計數器是閘門，不是真相：訂單成不成立由資料庫的 `Place` 決定。`Buy` 先呼叫 `Reserve`，賣完就回 `ErrOutOfStock`，不碰資料庫。資料庫失敗時，`Release` 用 `INCRBY` 把預扣的數量還回去。測試 `TestFlashSale_DatabaseFailureGivesTheUnitBack` 證明資料庫失敗後預扣有還回去。",
+      "claim_en": "The Redis counter is a gate, not the truth: the database `Place` call decides whether an order exists. `Buy` calls `Reserve` first, and a sold-out counter returns `ErrOutOfStock` without touching the database. When the database fails, `Release` gives the reserved quantity back with `INCRBY`. The test `TestFlashSale_DatabaseFailureGivesTheUnitBack` proves the unit is returned after a database failure.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "source of truth: PostgreSQL still decides whether an order exists"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/flashsale.go",
+          "pattern": "ok, err := f\\.gate\\.Reserve\\(ctx, productID, qty\\)\\n(.*\\n){3}\\tif !ok \\{\\n\\t\\treturn Order\\{\\}, ErrOutOfStock"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale.go",
+          "text": "f.orders.Place(job.ctx"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/flashsale.go",
+          "text": "r.rdb.IncrBy(ctx, saleKey(productID), int64(qty))"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_DatabaseFailureGivesTheUnitBack$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_DatabaseFailureGivesTheUnitBack"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_SoldOutAtTheCounterNeverReachesTheDatabase$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_SoldOutAtTheCounterNeverReachesTheDatabase"
+        }
+      ]
+    },
+    {
+      "id": "C10-4",
+      "kind": "repo",
+      "claim": "三個預設值：排隊的 channel 容量 `QueueSize` 預設 64，同時進資料庫的 `Workers` 預設 4，資料庫連線池上限 `DB_MAX_CONNS` 預設 10。`Run` 啟動 `Workers` 個 goroutine，從 channel 讀工作。測試 `TestFlashSale_DatabaseConcurrencyNeverExceedsWorkers` 讓 40 個人同時買、3 個 worker，同一時間在資料庫裡的人不超過 3。預設連線池上限比 Workers 大，因為寄信 worker、清理工作和一般讀取也共用連線池。",
+      "claim_en": "Three defaults: the queue channel capacity `QueueSize` is 64, the number of buyers allowed in the database at once, `Workers`, is 4, and the database pool ceiling `DB_MAX_CONNS` is 10. `Run` starts `Workers` goroutines that read jobs from the channel. The test `TestFlashSale_DatabaseConcurrencyNeverExceedsWorkers` has 40 buyers and 3 workers, and never more than 3 are in the database at once. The default pool ceiling is above the default `Workers` because the outbox worker, the janitor and ordinary reads share the pool.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale.go",
+          "text": "c.Workers = 4"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale.go",
+          "text": "c.QueueSize = 64"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale.go",
+          "text": "queue:   make(chan *flashJob, cfg.QueueSize),"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "defaultDBMaxConns         = 10"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "the outbox, the janitor and reads share the pool"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "envInt(\"DB_MAX_CONNS\", defaultDBMaxConns)"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/flashsale.go",
+          "pattern": "for range f\\.cfg\\.Workers \\{\\n(.*\\n){7}\\t\\t\\t\\tcase job := <-f\\.queue:"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_test.go",
+          "text": "const workers, buyers = 3, 40"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_DatabaseConcurrencyNeverExceedsWorkers$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_DatabaseConcurrencyNeverExceedsWorkers"
+        }
+      ]
+    },
+    {
+      "id": "C10-5",
+      "kind": "repo",
+      "claim": "`Buy` 把工作放進 channel 用的是 `select` 加 `default`：放得進去就放，放不進去就執行 `default`，還回預扣並回傳 `ErrBusy`。`internal/service/flashsale.go` 裡沒有單獨一行 `f.queue <- job`。",
+      "claim_en": "`Buy` puts a job into the channel with `select` and `default`: if there is room it sends, otherwise it runs `default`, gives the reservation back and returns `ErrBusy`. `internal/service/flashsale.go` has no bare `f.queue <- job` line.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/flashsale.go",
+          "pattern": "select \\{\\n\\tcase f\\.queue <- job:\\n\\tdefault:\\n\\t\\tf\\.release\\(job\\)\\n\\t\\treturn Order\\{\\}, ErrBusy\\n\\t\\}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-E",
+            "-e",
+            "^\\s+f\\.queue <- job",
+            "ep10",
+            "--",
+            "internal/service/flashsale.go"
+          ],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C10-6",
+      "kind": "repo",
+      "claim": "channel 滿了，新的請求當場得到 `ErrBusy`。測試 `TestFlashSale_FullQueueRejectsWithoutTouchingTheDatabase` 設 1 個 worker、1 個排隊位置：第一個人在資料庫裡，第二個人在排隊，第三個人得到 `ErrBusy`，資料庫呼叫次數仍是 1，預扣的那一個也還回去。",
+      "claim_en": "When the channel is full, a new request gets `ErrBusy` at once. The test `TestFlashSale_FullQueueRejectsWithoutTouchingTheDatabase` uses 1 worker and 1 queue slot: the first buyer is in the database, the second waits, the third gets `ErrBusy`, the database call count stays at 1, and the reserved unit is given back.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_test.go",
+          "text": "FlashConfig{Workers: 1, QueueSize: 1}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_FullQueueRejectsWithoutTouchingTheDatabase$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_FullQueueRejectsWithoutTouchingTheDatabase"
+        }
+      ]
+    },
+    {
+      "id": "C10-7",
+      "kind": "repo",
+      "claim": "handler 把 `ErrBusy` 變成 HTTP 503 並加上 `Retry-After: 1`，把賣完（`ErrOutOfStock`）變成 409。測試 `TestFlashSaleBuy_StatusMapping` 檢查這兩個狀態碼。",
+      "claim_en": "The handler turns `ErrBusy` into HTTP 503 with `Retry-After: 1`, and a sold-out product (`ErrOutOfStock`) into 409. The test `TestFlashSaleBuy_StatusMapping` checks both status codes.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "w.Header().Set(\"Retry-After\", \"1\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "http.StatusServiceUnavailable, api.Error{Code: \"busy\""
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestFlashSaleBuy_StatusMapping$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestFlashSaleBuy_StatusMapping/queue_full_is_503_with_Retry-After"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestFlashSaleBuy_StatusMapping$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestFlashSaleBuy_StatusMapping/sold_out"
+        }
+      ]
+    },
+    {
+      "id": "C10-8",
+      "kind": "repo",
+      "claim": "排隊中的客人自己離開時，用 `CompareAndSwap` 決定工作歸誰：worker 先認領就歸 worker，客人先放棄就歸客人。只有贏的那一方負責還回預扣，所以只還一次。worker 看到被放棄的工作就跳過。測試 `TestFlashSale_BuyerLeavesWhileQueued_UnitReturnedAndOrderSkipped` 證明預扣還回去、資料庫呼叫次數是 1。",
+      "claim_en": "When a queued buyer leaves, `CompareAndSwap` decides who owns the job: the worker if it claims first, the buyer if they give up first. Only the winner returns the reservation, so it is returned once. A worker that meets an abandoned job skips it. The test `TestFlashSale_BuyerLeavesWhileQueued_UnitReturnedAndOrderSkipped` proves the unit is returned and the database call count is 1.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale.go",
+          "text": "claimed   atomic.Bool"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale.go",
+          "text": "j.claimed.CompareAndSwap(false, true)"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/flashsale.go",
+          "pattern": "func \\(f \\*FlashSale\\) handle\\(job \\*flashJob\\) \\{\\n\\tif !job\\.claim\\(\\) \\{\\n\\t\\treturn"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/flashsale.go",
+          "pattern": "if job\\.claim\\(\\) \\{\\n\\t\\tf\\.release\\(job\\)\\n\\t\\treturn Order\\{\\}, abandon"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_BuyerLeavesWhileQueued_UnitReturnedAndOrderSkipped$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_BuyerLeavesWhileQueued_UnitReturnedAndOrderSkipped"
+        }
+      ]
+    },
+    {
+      "id": "C10-9",
+      "kind": "repo",
+      "claim": "`cmd/api/main.go` 的同一個 `workerCtx` 管三個 goroutine：寄信 worker、清理過期工作的 janitor、搶購 worker。`defer pool.Close()` 寫在前面，同一個 `defer` 寫在它後面：先取消，再等三個都結束，所以 `pool.Close` 排在最後。整個專案編譯通過。",
+      "claim_en": "In `cmd/api/main.go` one `workerCtx` manages three goroutines: the outbox worker, the expiry janitor and the flash sale workers. `defer pool.Close()` is written first and the one `defer` after it: it cancels and waits for all three to finish, so `pool.Close` runs last. The project builds.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "stopWorker\\(\\)\\n\\t\\t<-workerDone\\n\\t\\t<-janitorDone\\n\\t\\t<-flashDone"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "sale.Run(workerCtx)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "janitor.Run(workerCtx)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "dispatcher.Run(workerCtx)"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "defer pool\\.Close\\(\\)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "build",
+            "./..."
+          ]
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "(?s)defer pool\\.Close\\(\\).*defer func\\(\\) \\{\\n\\t\\tstopWorker\\(\\)"
+        }
+      ]
+    },
+    {
+      "id": "C10-10",
+      "kind": "repo",
+      "claim": "`OpenWithMaxConns` 把連線池的 `MaxConns` 設成指定的上限。測試 `TestFlashSale_Integration_ConnectionsStayUnderTheCeiling` 用真的 PostgreSQL：連線池上限 4、3 個 worker、150 個人同時買，每毫秒量一次連線池，忙碌連線最多 3 個，總連線數不超過 4。程式註解寫明：PostgreSQL 預設允許 100 個連線；連線池全忙時，要連線的請求會等，不會開新連線。",
+      "claim_en": "`OpenWithMaxConns` sets the pool `MaxConns` to the given ceiling. The test `TestFlashSale_Integration_ConnectionsStayUnderTheCeiling` uses a real PostgreSQL: pool ceiling 4, 3 workers, 150 buyers at once, the pool sampled every millisecond; at most 3 connections are busy and the total never exceeds 4. The code comment states that PostgreSQL allows 100 connections by default, and that a request waits when every pool connection is busy instead of opening a new one.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "cfg.MaxConns = maxConns"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "PostgreSQL allows 100 connections by default"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "it does not open a new one"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/postgres/postgres.go",
+          "text": "func OpenWithMaxConns(ctx context.Context, url string, maxConns int32)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_integration_test.go",
+          "text": "const stock, buyers, workers, maxConns = 200, 150, 3, 4"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_integration_test.go",
+          "text": "time.After(time.Millisecond)"
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_Integration_ConnectionsStayUnderTheCeiling$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_Integration_ConnectionsStayUnderTheCeiling"
+        }
+      ]
+    },
+    {
+      "id": "C10-11",
+      "kind": "repo",
+      "claim": "5 個庫存、100 個人同時買：剛好 5 張訂單，95 個人得到賣完，資料庫庫存是 0 不是負的，資料庫只收到 5 次下單呼叫，不是 100 次。測試 `TestFlashSale_Integration_NeverOversells` 證明。",
+      "claim_en": "With 5 units and 100 buyers at once: exactly 5 orders, 95 buyers hear sold out, the database stock is 0, not negative, and the database receives 5 order calls, not 100. The test `TestFlashSale_Integration_NeverOversells` proves it.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_integration_test.go",
+          "text": "const stock, buyers = 5, 100"
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_Integration_NeverOversells$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_Integration_NeverOversells"
+        }
+      ]
+    },
+    {
+      "id": "C10-12",
+      "kind": "repo",
+      "claim": "庫存 300、2 個 worker、5 個排隊位置、200 個人同時買：有人得到 `ErrBusy`，成交加上被拒絕剛好是 200，Redis 計數器剛好等於庫存減訂單數，被拒絕的人都把預扣還回去。測試 `TestFlashSale_Integration_FullQueueRejectsAndKeepsTheCounterHonest` 證明。",
+      "claim_en": "With 300 units, 2 workers, 5 queue slots and 200 buyers at once: some buyers get `ErrBusy`, bought plus rejected is exactly 200, the Redis counter equals stock minus orders, and every rejected buyer gave the reservation back. The test `TestFlashSale_Integration_FullQueueRejectsAndKeepsTheCounterHonest` proves it.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_integration_test.go",
+          "text": "const stock, buyers = 300, 200"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/flashsale_integration_test.go",
+          "text": "service.FlashConfig{Workers: 2, QueueSize: 5}"
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestFlashSale_Integration_FullQueueRejectsAndKeepsTheCounterHonest$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestFlashSale_Integration_FullQueueRejectsAndKeepsTheCounterHonest"
+        }
+      ]
+    },
+    {
+      "id": "C10-13",
+      "kind": "repo",
+      "claim": "tag `ep09` 的 `Checkout` 直接呼叫 `s.store.Place` 寫入資料庫，沒有預扣，也沒有排隊：整個 `*.go` 裡沒有 `Reserve`，`internal/service/order.go` 裡沒有 `chan`。這一章才加上預扣與排隊。",
+      "claim_en": "At tag `ep09`, `Checkout` calls `s.store.Place` on the database directly, with no reservation and no queue: no `*.go` file contains `Reserve`, and `internal/service/order.go` has no `chan`. This chapter adds the reservation and the queue.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "func (s *OrderService) Checkout(",
+            "ep09",
+            "--",
+            "internal/service/order.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "placed, err := s.store.Place(ctx, lines)",
+            "ep09",
+            "--",
+            "internal/service/order.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "Reserve",
+            "ep09",
+            "--",
+            "*.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "chan ",
+            "ep09",
+            "--",
+            "internal/service/order.go"
+          ],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "X10-1",
+      "kind": "reference",
+      "claim": "Go 語言規格：`select` 如果有 `default`，而且其他 case 都沒辦法立刻進行，就執行 `default`，不會等待。送出語句 `ch <- v` 則在 channel 滿的時候，會等到可以送出為止。",
+      "claim_en": "The Go specification: a `select` with a `default` case runs `default` when no other case can proceed at once, and does not wait. A send statement `ch <- v` waits until the send can proceed.",
+      "sources": [
+        "https://go.dev/ref/spec#Select_statements",
+        "https://go.dev/ref/spec#Send_statements"
+      ]
+    }
+  ]
+}

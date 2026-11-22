@@ -1,0 +1,718 @@
+{
+  "chapter": "ch07",
+  "title": "付兩次錢",
+  "tag": "ep07",
+  "claims": [
+    {
+      "id": "C7-1",
+      "kind": "repo",
+      "claim": "tag `ep06` 的程式碼還沒有金流回呼：沒有 `internal/payment/ecpay/ecpay.go`、`db/migrations/00004_add_payments.sql`、`internal/handler/payment.go`，也沒有 `internal/service/payment.go`。這四個檔案是這一章新增的。",
+      "claim_en": "The code at tag `ep06` has no payment callback yet: none of `internal/payment/ecpay/ecpay.go`, `db/migrations/00004_add_payments.sql`, `internal/handler/payment.go` and `internal/service/payment.go` exists. All four files are added in this chapter.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep06:internal/payment/ecpay/ecpay.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep06:db/migrations/00004_add_payments.sql"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep07:internal/payment/ecpay/ecpay.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep06:internal/handler/payment.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep06:internal/service/payment.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:internal/handler/payment.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:internal/service/payment.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:db/migrations/00004_add_payments.sql"]
+        }
+      ]
+    },
+    {
+      "id": "C7-2",
+      "kind": "repo",
+      "claim": "`Verifier.CheckMacValue` 照六個步驟計算簽章：欄位依名稱排序且不分大小寫；串成 `k=v`，前面加 `HashKey=`、後面加 `&HashIV=`；用 `url.QueryEscape` 編碼；轉小寫；把 `!`、`*`、`(`、`)` 四個符號還原；SHA-256 後轉大寫十六進位。`ecpay.go` 只 import 標準庫。拿掉第 5 步的還原，測試 `TestCheckMacValue_GoldenVectors` 失敗。程式碼註解說明：第 5 步是因為 .NET 的編碼器不動這四個符號，而 Go 的會轉成百分比碼。",
+      "claim_en": "`Verifier.CheckMacValue` computes the signature in six steps: sort the fields by name ignoring case; join as `k=v` with `HashKey=` in front and `&HashIV=` at the back; encode with `url.QueryEscape`; lower-case; put back the four characters `!`, `*`, `(`, `)`; SHA-256 and upper-case hex. `ecpay.go` imports only the standard library. Without step 5, the test `TestCheckMacValue_GoldenVectors` fails. The code comment explains step 5: .NET's encoder leaves those four characters alone, but Go's escapes them.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "a, b := strings.ToLower(keys[i]), strings.ToLower(keys[j])"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "sb.WriteString(\"HashKey=\" + v.hashKey)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "sb.WriteString(\"&HashIV=\" + v.hashIV)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "encoded := strings.ToLower(url.QueryEscape(sb.String()))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "strings.NewReplacer(\"%21\", \"!\", \"%2a\", \"*\", \"%28\", \"(\", \"%29\", \")\").Replace(encoded)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "sum := sha256.Sum256([]byte(encoded))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "return strings.ToUpper(hex.EncodeToString(sum[:]))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "which .NET's encoder leaves alone but Go's escapes"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-E",
+            "github\\.com|golang\\.org",
+            "ep07",
+            "--",
+            "internal/payment/ecpay/ecpay.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/payment/ecpay/ecpay.go",
+            "old": "encoded = strings.NewReplacer(\"%21\", \"!\", \"%2a\", \"*\", \"%28\", \"(\", \"%29\", \")\").Replace(encoded)",
+            "new": "encoded = strings.NewReplacer().Replace(encoded)"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestCheckMacValue_GoldenVectors$",
+            "./internal/payment/ecpay"
+          ],
+          "exit": "nonzero",
+          "output_contains": "--- FAIL: TestCheckMacValue_GoldenVectors"
+        }
+      ]
+    },
+    {
+      "id": "C7-3",
+      "kind": "repo",
+      "claim": "簽章測試 `TestCheckMacValue_GoldenVectors` 有兩組預期值，測試檔的註解說明它們由另一個獨立實作算出，不是用被測的程式算的。第二組含空白、`!`、`*`、`(`、`)`、單引號、`@`，以及大小寫混合的欄位名稱。這個測試通過。",
+      "claim_en": "The signature test `TestCheckMacValue_GoldenVectors` has two expected values, and a comment in the test file says a separate implementation produced them, not the code under test. The second case contains a space, `!`, `*`, `(`, `)`, a single quote, `@`, and mixed-case field names. The test passes.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "text": "were produced by a separate implementation"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "text": "\"special characters and mixed-case keys\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "text": "\"ItemName\":        {\"Keyboard (Pro) *RGB* a@b\"}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "text": "\"TradeDesc\":       {\"it's a test!\"}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "text": "\"merchantTradeNo\": {\"x y\"}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestCheckMacValue_GoldenVectors$",
+            "-v",
+            "./internal/payment/ecpay"
+          ],
+          "output_contains": "--- PASS: TestCheckMacValue_GoldenVectors"
+        }
+      ]
+    },
+    {
+      "id": "C7-4",
+      "kind": "repo",
+      "claim": "`Verify` 先取出並比對簽章，通過之後才讀 `TradeAmt` 等欄位；比對用 `subtle.ConstantTimeCompare`。測試 `TestVerify` 裡，簽章後改金額、改訂單編號、多加欄位、缺簽章、簽章是亂碼、用別把 key 簽，六種情況都回 `ErrBadSignature`。",
+      "claim_en": "`Verify` extracts and compares the signature first and reads fields such as `TradeAmt` only after it passes; the comparison uses `subtle.ConstantTimeCompare`. In the test `TestVerify`, six cases all return `ErrBadSignature`: amount changed after signing, order changed after signing, an extra field, a missing signature, a garbage signature, and signing with another key.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "pattern": "(?s)func \\(v \\*Verifier\\) Verify\\(.*?got := params\\.Get\\(CheckMacField\\).*?subtle\\.ConstantTimeCompare\\(.*?strconv\\.Atoi\\(params\\.Get\\(\"TradeAmt\"\\)\\)"
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "pattern": "\"amount changed after signing\".*ecpay\\.ErrBadSignature\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "pattern": "\"order changed after signing\".*ecpay\\.ErrBadSignature\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "pattern": "\"extra field added after signing\".*ecpay\\.ErrBadSignature\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "pattern": "\"signature missing\".*ecpay\\.ErrBadSignature\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "pattern": "\"signature garbage\".*ecpay\\.ErrBadSignature\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay_test.go",
+          "pattern": "\"signed with another key\".*ecpay\\.ErrBadSignature\\}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestVerify$",
+            "-v",
+            "./internal/payment/ecpay"
+          ],
+          "output_contains": "--- PASS: TestVerify"
+        }
+      ]
+    },
+    {
+      "id": "C7-5",
+      "kind": "repo",
+      "claim": "`payments` 表的 `trade_no` 欄位宣告 `UNIQUE`。`InsertPayment` 的 SQL 用 `ON CONFLICT (trade_no) DO NOTHING`，所以重複的 `trade_no` 影響 0 列，不是錯誤。`Record` 在影響 0 列時回傳 `false, nil`。`db/queries/payments.sql` 裡沒有 `SELECT`，也就是沒有先查再寫。遷移檔的註解說明：同一個回呼重送時，`trade_no` 相同。`trade_no` 來自綠界回呼的 `TradeNo` 欄位；`ecpay.go` 的註解說明 `TradeNo` 是綠界的交易編號，每筆付款唯一、重送時相同；回呼沒有 `TradeNo` 就被拒絕。",
+      "claim_en": "The `trade_no` column of the `payments` table is declared `UNIQUE`. The SQL of `InsertPayment` uses `ON CONFLICT (trade_no) DO NOTHING`, so a duplicate `trade_no` affects 0 rows instead of raising an error. `Record` returns `false, nil` when 0 rows were affected. `db/queries/payments.sql` contains no `SELECT`, so there is no check-then-write. The comment in the migration says `trade_no` is the same on every resend of the same callback. `trade_no` comes from the `TradeNo` field of the ECPay callback; a comment in `ecpay.go` says `TradeNo` is ECPay's transaction number, unique per payment and identical on every resend; a callback without `TradeNo` is rejected.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "db/migrations/00004_add_payments.sql",
+          "pattern": "trade_no\\s+text\\s+NOT NULL UNIQUE"
+        },
+        {
+          "type": "contains",
+          "file": "db/queries/payments.sql",
+          "text": "-- name: InsertPayment :execrows"
+        },
+        {
+          "type": "contains",
+          "file": "db/queries/payments.sql",
+          "text": "ON CONFLICT (trade_no) DO NOTHING;"
+        },
+        {
+          "type": "matches",
+          "file": "internal/repository/payments.go",
+          "pattern": "case n == 0:\\n\\t\\treturn false, nil"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-i",
+            "-e",
+            "select",
+            "ep07",
+            "--",
+            "db/queries/payments.sql"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00004_add_payments.sql",
+          "text": "is the same on every resend of"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "TradeNo         string // ECPay's transaction number: unique per payment, identical on every resend"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "TradeNo:         params.Get(\"TradeNo\"),"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "if cb.MerchantTradeNo == \"\" || cb.TradeNo == \"\" {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/payment.go",
+          "text": "TradeNo: cb.TradeNo"
+        }
+      ]
+    },
+    {
+      "id": "C7-6",
+      "kind": "repo",
+      "claim": "`Record` 在同一個交易裡先寫 `payments`，再用 `UPDATE ... WHERE id = $1 AND total_twd = $2` 把訂單標成已付。金額對不上時，`UPDATE` 影響 0 列，`Record` 在 `Commit` 之前回傳 `ErrPaymentMismatch`，交易回滾，`payments` 那一列不留下。測試 `TestPayments_ForgedAndMismatchedCallbacksRecordNothing` 用偽造簽章、錯誤金額、不存在的訂單三種回呼證明，`payments` 表 0 列、訂單沒有標成已付。",
+      "claim_en": "In one transaction, `Record` first writes `payments`, then marks the order paid with `UPDATE ... WHERE id = $1 AND total_twd = $2`. When the amount does not match, the `UPDATE` affects 0 rows and `Record` returns `ErrPaymentMismatch` before `Commit`; the transaction rolls back and the `payments` row is not kept. The test `TestPayments_ForgedAndMismatchedCallbacksRecordNothing` proves it with three callbacks (forged signature, wrong amount, unknown order): 0 rows in `payments` and the order is not marked paid.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/payments.go",
+          "text": "defer func() { _ = tx.Rollback(ctx) }()"
+        },
+        {
+          "type": "matches",
+          "file": "internal/repository/payments.go",
+          "pattern": "(?s)r\\.db\\.Begin\\(ctx\\).*?q\\.InsertPayment\\(.*?q\\.MarkOrderPaid\\(.*?if n == 0 \\{.*?ErrPaymentMismatch.*?tx\\.Commit\\(ctx\\)"
+        },
+        {
+          "type": "contains",
+          "file": "db/queries/payments.sql",
+          "text": "WHERE id = $1 AND total_twd = $2;"
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestPayments_ForgedAndMismatchedCallbacksRecordNothing$",
+            "-v",
+            "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestPayments_ForgedAndMismatchedCallbacksRecordNothing"
+        }
+      ]
+    },
+    {
+      "id": "C7-7",
+      "kind": "repo",
+      "claim": "回呼路由對綠界的回應有四種：處理成功回 200 與 `1|OK`；請求內容讀不成表單（例如超過 16 KB 的上限）回 400 與 `0|bad form`；簽章、格式、金額或訂單不對（`ErrInvalidCallback`、`ErrPaymentMismatch`）回 400 與 `0|rejected`；其他錯誤（例如資料庫掛了）回 500 與 `0|error`，不回 `1|OK`。路由程式裡只有這四個 `reply` 呼叫。測試 `TestECPayCallbackRoute` 涵蓋成功、簽章或金額不對、其他錯誤這三類並通過；測試 `TestECPayCallbackRoute_OversizedBodyIsRejected` 證明超過上限的請求回 400。程式註解說明：綠界收到不是 `1|OK` 的回應就會重送。",
+      "claim_en": "The callback route answers ECPay in four ways: success returns 200 and `1|OK`; a body that cannot be read as a form (for example one over the 16 KB limit) returns 400 and `0|bad form`; a bad signature, bad format, wrong amount or unknown order (`ErrInvalidCallback`, `ErrPaymentMismatch`) returns 400 and `0|rejected`; any other error (for example, the database is down) returns 500 and `0|error`, never `1|OK`. The route code holds exactly these four `reply` calls. The test `TestECPayCallbackRoute` covers three of them (success, bad signature or amount, other error) and passes; the test `TestECPayCallbackRoute_OversizedBodyIsRejected` proves a request over the limit gets 400. A code comment says ECPay resends when it gets a reply other than `1|OK`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "reply(w, http.StatusOK, \"1|OK\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "case errors.Is(err, service.ErrInvalidCallback), errors.Is(err, service.ErrPaymentMismatch):"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "reply(w, http.StatusBadRequest, \"0|rejected\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "reply(w, http.StatusInternalServerError, \"0|error\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "if err := r.ParseForm(); err != nil {\n\t\t\treply(w, http.StatusBadRequest, \"0|bad form\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "const maxCallbackBytes = 16 << 10"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-c", "-e", "reply(w, http\\.", "ep07", "--", "internal/handler/payment.go"],
+          "output_contains": "internal/handler/payment.go:4"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment_test.go",
+          "text": "{\"our failure is not acknowledged\", errors.New(\"db down: 10.0.0.5\"), http.StatusInternalServerError, \"0|error\"}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "a non-\"1|OK\" reply makes ECPay resend"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestECPayCallbackRoute$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestECPayCallbackRoute "
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestECPayCallbackRoute_OversizedBodyIsRejected$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestECPayCallbackRoute_OversizedBodyIsRejected"
+        }
+      ]
+    },
+    {
+      "id": "C7-8",
+      "kind": "repo",
+      "claim": "`PaymentService.HandleECPayCallback` 先驗章，再看付款是否成功。付款沒有完成（`RtnCode` 不是 1）時只寫日誌、回傳 `nil`，不呼叫儲存層。重複的回呼（`Record` 回傳 `recorded=false`）也回傳 `nil`，並寫日誌「duplicate payment callback ignored」。儲存層的一般錯誤不會被吞掉。測試 `TestHandleECPayCallback` 涵蓋這些情況並通過。程式註解說明：付款失敗的通知也回 `nil`，因為重送不會改變結果。",
+      "claim_en": "`PaymentService.HandleECPayCallback` verifies the signature first and then looks at whether the payment succeeded. When the payment is not completed (`RtnCode` is not 1), it only logs and returns `nil` without calling the store. A duplicate callback (`Record` returns `recorded=false`) also returns `nil` and logs \"duplicate payment callback ignored\". A plain storage error is not swallowed. The test `TestHandleECPayCallback` covers these cases and passes. A code comment says a failed payment is acknowledged too, since resending will not change its outcome.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/payment.go",
+          "pattern": "(?s)s\\.verifier\\.Verify\\(params\\).*?if !cb\\.Paid \\{.*?return nil\\n\\t\\}.*?s\\.store\\.Record\\("
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/payment.go",
+          "pattern": "case !recorded:\\n\\t\\ts\\.logger\\.Info\\(\"duplicate payment callback ignored\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/payment.go",
+          "text": "case err != nil:\n\t\treturn fmt.Errorf(\"handle callback: %w\", err)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/payment.go",
+          "text": "since resending will not change its outcome"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/payment_test.go",
+          "text": "\"a resend is not an error\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/payment_test.go",
+          "text": "\"failed payment is acknowledged, not recorded\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/payment_test.go",
+          "text": "\"storage failure is not swallowed\""
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestHandleECPayCallback$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestHandleECPayCallback "
+        }
+      ]
+    },
+    {
+      "id": "C7-9",
+      "kind": "repo",
+      "claim": "回呼路由 `POST /payments/ecpay/callback` 由 `WithPaymentCallback` 掛在 API handler 的前面。這條路由只套用 `RequestLog` 與 `Recover` 兩個 middleware，沒有套用限流與 session。其餘路徑交給原本的 API handler，測試 `TestWithPaymentCallback_LeavesTheAPIReachable` 確認 `/healthz` 仍回 200。程式註解說明：打進來的是綠界的伺服器，沒有 cookie，不應該被當成訪客限流；它的驗證身分靠簽章。",
+      "claim_en": "The callback route `POST /payments/ecpay/callback` is mounted in front of the API handler by `WithPaymentCallback`. The route uses only two middlewares, `RequestLog` and `Recover`; it has no rate limiter and no session middleware. All other paths go to the original API handler, and the test `TestWithPaymentCallback_LeavesTheAPIReachable` confirms `/healthz` still returns 200. A code comment says the caller is ECPay's server, which has no cookie and must not be throttled as a visitor; its authentication is the signature.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "const ECPayCallbackPath = \"/payments/ecpay/callback\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "r.With(RequestLog(logger), Recover(logger)).Post(ECPayCallbackPath, ECPayCallback(payments, logger))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "r.Mount(\"/\", api)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "which has no cookie and must not be throttled as a visitor"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "Its authentication is the CheckMacValue signature"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "handler.WithPaymentCallback(h, payments, logger)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestWithPaymentCallback_LeavesTheAPIReachable$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestWithPaymentCallback_LeavesTheAPIReachable"
+        }
+      ]
+    },
+    {
+      "id": "C7-10",
+      "kind": "repo",
+      "claim": "整合測試用真的 PostgreSQL，走完整的 handler、service、repository。`TestPayments_ResentCallbackIsRecordedOnce` 把同一份簽好章的回呼用 10 個 goroutine 同時送出：10 個都收到 200 與 `1|OK`，`payments` 表 1 列，訂單標成已付。`TestPayments_DifferentTradeNoIsNotADuplicate` 證明不同的 `trade_no` 記成 2 列。`TestPayments_UniqueKeyIsEnforcedByTheDatabase` 繞過 service 直接寫入同一個 `trade_no` 兩次，第二次被資料庫以 SQLSTATE 23505 拒絕。",
+      "claim_en": "The integration tests use a real PostgreSQL and run the full handler, service and repository stack. `TestPayments_ResentCallbackIsRecordedOnce` sends one signed callback from 10 goroutines at the same time: all 10 get 200 and `1|OK`, `payments` has 1 row, and the order is marked paid. `TestPayments_DifferentTradeNoIsNotADuplicate` shows different `trade_no` values make 2 rows. `TestPayments_UniqueKeyIsEnforcedByTheDatabase` bypasses the service and inserts the same `trade_no` twice; the database rejects the second with SQLSTATE 23505.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/payments_integration_test.go",
+          "text": "const deliveries = 10"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/payments_integration_test.go",
+          "text": "close(start)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/payments_integration_test.go",
+          "text": "payments != 1 || !paid"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/payments_integration_test.go",
+          "text": "pgErr.Code != \"23505\""
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestPayments_(ResentCallbackIsRecordedOnce|DifferentTradeNoIsNotADuplicate|UniqueKeyIsEnforcedByTheDatabase)$",
+            "-v",
+            "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestPayments_ResentCallbackIsRecordedOnce"
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestPayments_(ResentCallbackIsRecordedOnce|DifferentTradeNoIsNotADuplicate|UniqueKeyIsEnforcedByTheDatabase)$",
+            "-v",
+            "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestPayments_DifferentTradeNoIsNotADuplicate"
+        },
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestPayments_(ResentCallbackIsRecordedOnce|DifferentTradeNoIsNotADuplicate|UniqueKeyIsEnforcedByTheDatabase)$",
+            "-v",
+            "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestPayments_UniqueKeyIsEnforcedByTheDatabase"
+        }
+      ]
+    },
+    {
+      "id": "C7-11",
+      "kind": "repo",
+      "claim": "把 `InsertPayment` 的 SQL 裡的 `ON CONFLICT (trade_no) DO NOTHING` 拿掉，測試 `TestPayments_ResentCallbackIsRecordedOnce` 失敗，錯誤訊息是 `delivery got 500`。",
+      "claim_en": "After removing `ON CONFLICT (trade_no) DO NOTHING` from the SQL of `InsertPayment`, the test `TestPayments_ResentCallbackIsRecordedOnce` fails with `delivery got 500`.",
+      "checks": [
+        {
+          "type": "run",
+          "requires": [
+            "docker"
+          ],
+          "edit": {
+            "file": "internal/repository/dbgen/payments.sql.go",
+            "old": "ON CONFLICT (trade_no) DO NOTHING",
+            "new": ""
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestPayments_ResentCallbackIsRecordedOnce$",
+            "-v",
+            "./internal/repository"
+          ],
+          "exit": "nonzero",
+          "output_contains": "delivery got 500"
+        }
+      ]
+    },
+    {
+      "id": "C7-12",
+      "kind": "repo",
+      "claim": "`ecpay` 套件裡有三個常數，是綠界公開開發文件的沙箱測試用商店代號、HashKey 與 HashIV，註解寫明只能測試用、不可用於真的金流。`cmd/api/main.go` 從環境變數 `ECPAY_MERCHANT_ID`、`ECPAY_HASH_KEY`、`ECPAY_HASH_IV` 讀正式設定；三個沒有全部設定，而且 `ECPAY_SANDBOX` 不是 1 時，API 拒絕啟動。程式註解說明原因：用公開的金鑰驗章，任何人都能偽造「已付款」。",
+      "claim_en": "The `ecpay` package holds three constants: the sandbox merchant id, HashKey and HashIV from ECPay's public developer documentation. The comment says they are for testing only and never for real money. `cmd/api/main.go` reads the real settings from the environment variables `ECPAY_MERCHANT_ID`, `ECPAY_HASH_KEY` and `ECPAY_HASH_IV`; when they are not all set and `ECPAY_SANDBOX` is not 1, the API refuses to start. A code comment gives the reason: a callback endpoint verified with a published key accepts anyone's forged \"paid\".",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "pattern": "SandboxMerchantID\\s+= \""
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "pattern": "SandboxHashKey\\s+= \""
+        },
+        {
+          "type": "matches",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "pattern": "SandboxHashIV\\s+= \""
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "never use them for real money"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "os.Getenv(\"ECPAY_MERCHANT_ID\"), os.Getenv(\"ECPAY_HASH_KEY\"), os.Getenv(\"ECPAY_HASH_IV\")"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "if os.Getenv(\"ECPAY_SANDBOX\") == \"1\" {"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "return nil, errors.New(\"set ECPAY_MERCHANT_ID, ECPAY_HASH_KEY and ECPAY_HASH_IV"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "a callback endpoint verified with a published key accepts anyone's forged \"paid\""
+        }
+      ]
+    },
+    {
+      "id": "X7-1",
+      "kind": "reference",
+      "claim": "PostgreSQL 的 `INSERT ... ON CONFLICT DO NOTHING` 在遇到唯一性衝突時，略過那一列，不回傳錯誤。",
+      "claim_en": "PostgreSQL's `INSERT ... ON CONFLICT DO NOTHING` skips the row on a uniqueness conflict and raises no error.",
+      "sources": [
+        "https://www.postgresql.org/docs/current/sql-insert.html"
+      ]
+    },
+    {
+      "id": "X7-2",
+      "kind": "reference",
+      "claim": "Go 標準庫的 `subtle.ConstantTimeCompare` 在兩個 slice 內容相同時回傳 1，否則回傳 0；耗時只跟長度有關，跟內容無關。",
+      "claim_en": "The Go standard library function `subtle.ConstantTimeCompare` returns 1 if the two slices have equal contents and 0 otherwise; the time taken depends on the length of the slices, not their contents.",
+      "sources": [
+        "https://pkg.go.dev/crypto/subtle#ConstantTimeCompare"
+      ]
+    }
+  ]
+}

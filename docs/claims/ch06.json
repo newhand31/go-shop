@@ -1,0 +1,465 @@
+{
+  "chapter": "ch06",
+  "title": "超賣",
+  "tag": "ep06",
+  "claims": [
+    {
+      "id": "C6-1",
+      "kind": "repo",
+      "claim": "tag `ep05` 的程式碼還沒有訂單與庫存：沒有 `internal/repository/orders.go`，也沒有 `00003_add_stock_and_orders.sql`。這兩個檔是 tag `ep06` 新增的。",
+      "claim_en": "The code at tag `ep05` has no orders and no stock: there is no `internal/repository/orders.go` and no `00003_add_stock_and_orders.sql`. Both files are added at tag `ep06`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep05:internal/repository/orders.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep05:db/migrations/00003_add_stock_and_orders.sql"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep06:internal/repository/orders.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep06:db/migrations/00003_add_stock_and_orders.sql"]
+        }
+      ]
+    },
+    {
+      "id": "C6-2",
+      "kind": "repo",
+      "claim": "種子資料的第三個商品是「27 吋螢幕」。遷移檔 `00003` 為 `products` 加上 `stock` 欄位，欄位不可為空、預設 0、有 `CHECK (stock >= 0)`；商品編號 3 的庫存設成 1，其他商品設成 10。",
+      "claim_en": "The third seeded product is the 27-inch monitor. Migration `00003` adds a `stock` column to `products` that is NOT NULL, defaults to 0 and has `CHECK (stock >= 0)`; product id 3 gets a stock of 1 and every other product gets 10.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "db/migrations/00002_seed_products.sql",
+          "pattern": "\\('機械式鍵盤', 2490\\),\\n\\s+\\('人體工學滑鼠', 1290\\),\\n\\s+\\('27 吋螢幕', 5990\\);"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00003_add_stock_and_orders.sql",
+          "text": "ALTER TABLE products ADD COLUMN stock integer NOT NULL DEFAULT 0 CHECK (stock >= 0);"
+        },
+        {
+          "type": "contains",
+          "file": "db/migrations/00003_add_stock_and_orders.sql",
+          "text": "UPDATE products SET stock = CASE id WHEN 3 THEN 1 ELSE 10 END;"
+        }
+      ]
+    },
+    {
+      "id": "C6-3",
+      "kind": "repo",
+      "claim": "舊寫法 `naiveOrders` 只存在於測試檔。它在交易裡用一般的 `SELECT stock` 讀庫存（測試檔的註解寫明：即使在交易裡，一般的 `SELECT` 也不上鎖），在 Go 裡判斷，再用 `UPDATE products SET stock = $2` 把讀到的數字減去數量後寫回。測試 `TestOversell_WithoutALockMoreThanTheStockIsSold` 讓 20 個買家搶 1 台螢幕，賣出的數量超過 1，測試通過，代表超賣被重現。",
+      "claim_en": "The old approach `naiveOrders` lives only in a test file. Inside a transaction it reads the stock with a plain `SELECT stock` (a comment in the test file notes that even inside a transaction a plain `SELECT` takes no lock), decides in Go, and writes back the number it read minus the quantity with `UPDATE products SET stock = $2`. The test `TestOversell_WithoutALockMoreThanTheStockIsSold` sends 20 buyers after 1 monitor and more than 1 is sold; the test passes, so the oversell is reproduced.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "tx, err := n.pool.Begin(ctx)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "`SELECT stock FROM products WHERE id = $1`"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "`UPDATE products SET stock = $2 WHERE id = $1`, l.ProductID, stock-l.Quantity"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "// note: even inside a transaction, a plain SELECT takes no lock"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "buyers    = 20"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOversell_WithoutALockMoreThanTheStockIsSold$",
+            "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOversell_WithoutALockMoreThanTheStockIsSold"
+        }
+      ]
+    },
+    {
+      "id": "C6-4",
+      "kind": "repo",
+      "claim": "`Orders.Place` 自己寫交易邊界：先呼叫 `Begin`，緊接著用 `defer` 呼叫 `Rollback` 並忽略它的回傳值，最後呼叫 `Commit`。",
+      "claim_en": "`Orders.Place` writes its own transaction boundary: it calls `Begin`, immediately defers a `Rollback` whose return value it ignores, and finally calls `Commit`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/repository/orders.go",
+          "pattern": "tx, err := r\\.db\\.Begin\\(ctx\\)\\n(.*\\n)*?\\tdefer func\\(\\) \\{ _ = tx\\.Rollback\\(ctx\\) \\}\\(\\)\\n(.*\\n)*?\\tif err := tx\\.Commit\\(ctx\\); err != nil \\{"
+        }
+      ]
+    },
+    {
+      "id": "C6-5",
+      "kind": "repo",
+      "claim": "修法的鎖是一條 SQL：`LockProduct` 查詢結尾是 `FOR UPDATE`。`Place` 在交易裡先呼叫 `LockProduct`，再用讀到的庫存和數量比較，最後才呼叫 `DecreaseStock` 扣庫存。扣庫存的 SQL 是 `stock = stock - $2`。",
+      "claim_en": "The fix is one SQL clause: the `LockProduct` query ends with `FOR UPDATE`. Inside the transaction `Place` first calls `LockProduct`, then compares the stock it read with the quantity, and only then calls `DecreaseStock`. The decrease is `stock = stock - $2`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "db/queries/products.sql",
+          "pattern": "-- name: LockProduct :one\\n(--.*\\n)+SELECT id, price_twd, stock\\nFROM products\\nWHERE id = \\$1\\nFOR UPDATE;"
+        },
+        {
+          "type": "contains",
+          "file": "db/queries/products.sql",
+          "text": "UPDATE products SET stock = stock - $2 WHERE id = $1;"
+        },
+        {
+          "type": "matches",
+          "file": "internal/repository/orders.go",
+          "pattern": "q\\.LockProduct\\((.*\\n)*?\\t\\tif int\\(p\\.Stock\\) < l\\.Quantity \\{\\n(.*\\n)*?\\t\\tif err := q\\.DecreaseStock\\("
+        }
+      ]
+    },
+    {
+      "id": "C6-6",
+      "kind": "repo",
+      "claim": "`Place` 在上鎖之前，先把訂單的商品行依商品編號由小到大排序。原始碼註解說明理由：兩張訂單用相反的順序要同樣的商品，會互相等待而死結。測試 `TestOrders_OppositeLineOrderDoesNotDeadlock` 同時送出 10 張訂單，其中 5 張依 1、2 的順序，5 張依 2、1 的順序，全部成功。",
+      "claim_en": "Before taking any lock, `Place` sorts the order lines by product id, ascending. A source comment gives the reason: two orders that want the same products in opposite order would wait on each other and deadlock. The test `TestOrders_OppositeLineOrderDoesNotDeadlock` sends 10 orders at once, 5 in the order 1, 2 and 5 in the order 2, 1, and all succeed.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/repository/orders.go",
+          "pattern": "sort\\.Slice\\(sorted, func\\(i, j int\\) bool \\{ return sorted\\[i\\]\\.ProductID < sorted\\[j\\]\\.ProductID \\}\\)\\n(.*\\n)*?\\tfor _, l := range sorted \\{\\n\\t\\tp, err := q\\.LockProduct\\("
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders.go",
+          "text": "would otherwise each hold one lock and wait for the other: a deadlock."
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "{{ProductID: 1, Quantity: 1}, {ProductID: 2, Quantity: 1}},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "{{ProductID: 2, Quantity: 1}, {ProductID: 1, Quantity: 1}},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "for i := 0; i < 5; i++ {"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOrders_OppositeLineOrderDoesNotDeadlock$",
+            "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOrders_OppositeLineOrderDoesNotDeadlock"
+        }
+      ]
+    },
+    {
+      "id": "C6-7",
+      "kind": "repo",
+      "claim": "同樣 20 個買家搶 1 台螢幕，改走真的 `repository.Orders` 之後（測試包了 `slowBegin`，讓每個交易在每次呼叫 `Exec` 前暫停 50 毫秒；`slowTx` 只覆寫 `Exec`，`QueryRow` 不暫停），剛好 1 個買家成功、19 個得到缺貨，資料表裡有 1 張訂單、庫存是 0。測試 `TestOversell_WithForUpdateExactlyTheStockIsSold` 證明。把查詢裡的 `FOR UPDATE` 拿掉，這個測試就失敗，輸出含 `products_stock_check`：資料表的 `CHECK` 擋住負庫存，但有買家收到的是資料庫錯誤，不是缺貨。",
+      "claim_en": "With the same 20 buyers and 1 monitor going through the real `repository.Orders` (the test wraps it in `slowBegin`, which pauses every transaction for 50 milliseconds before each `Exec` call; `slowTx` overrides only `Exec`, so `QueryRow` does not pause), exactly 1 buyer succeeds, 19 are told it is sold out, the table holds 1 order and the stock is 0. The test `TestOversell_WithForUpdateExactlyTheStockIsSold` proves it. Remove `FOR UPDATE` from the query and this test fails, with `products_stock_check` in the output: the table's `CHECK` blocks the negative stock, but some buyers receive a database error instead of a sold-out answer.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "func (t slowTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {\n\ttime.Sleep(50 * time.Millisecond)"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-e", "slowTx) QueryRow", "ep06", "--", "internal/repository/orders_integration_test.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "if bought != 1 || soldOut != buyers-1 {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "if orders != 1 || units != 1 || stock != 0 {"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOversell_WithForUpdateExactlyTheStockIsSold$",
+            "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOversell_WithForUpdateExactlyTheStockIsSold"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "edit": {
+            "file": "internal/repository/dbgen/products.sql.go",
+            "old": "WHERE id = $1\nFOR UPDATE\n`",
+            "new": "WHERE id = $1\n`"
+          },
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOversell_WithForUpdateExactlyTheStockIsSold$",
+            "-v", "./internal/repository"
+          ],
+          "exit": "nonzero",
+          "output_contains": "--- FAIL: TestOversell_WithForUpdateExactlyTheStockIsSold"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "edit": {
+            "file": "internal/repository/dbgen/products.sql.go",
+            "old": "WHERE id = $1\nFOR UPDATE\n`",
+            "new": "WHERE id = $1\n`"
+          },
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOversell_WithForUpdateExactlyTheStockIsSold$",
+            "-v", "./internal/repository"
+          ],
+          "exit": "nonzero",
+          "output_contains": "violates check constraint \"products_stock_check\""
+        }
+      ]
+    },
+    {
+      "id": "C6-8",
+      "kind": "repo",
+      "claim": "訂單是全有或全無。測試 `TestOrders_FailedOrderRollsBackEverything` 下一張兩行的訂單：鍵盤 2 個（庫存 10，夠），螢幕 2 台（庫存 1，不夠）。訂單失敗並回傳缺貨錯誤。接著下一張買 1 個鍵盤的訂單，在 3 秒內成功，最後鍵盤庫存是 9、訂單只有 1 張。",
+      "claim_en": "An order is all or nothing. The test `TestOrders_FailedOrderRollsBackEverything` places an order with two lines: 2 keyboards (stock 10, enough) and 2 monitors (stock 1, not enough). The order fails with an out-of-stock error. A follow-up order for 1 keyboard then succeeds within 3 seconds, leaving a keyboard stock of 9 and exactly 1 order.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "{ProductID: 1, Quantity: 2},         // 10 in stock: this line succeeds inside the transaction"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "{ProductID: monitorID, Quantity: 2}, // 1 in stock: this one fails"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "context.WithTimeout(ctx, 3*time.Second)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "if keyboards != 9 || orders != 1 {"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": [
+            "go", "test", "-tags=integration", "-count=1",
+            "-run", "^TestOrders_FailedOrderRollsBackEverything$",
+            "-v", "./internal/repository"
+          ],
+          "output_contains": "--- PASS: TestOrders_FailedOrderRollsBackEverything"
+        }
+      ]
+    },
+    {
+      "id": "C6-9",
+      "kind": "repo",
+      "claim": "`service` 套件宣告自己需要的介面：`OrderStore` 只有 1 個方法 `Place`，`CheckoutCart` 有 2 個方法 `Items` 與 `RemoveItem`。`cmd/api/main.go` 用編譯期檢查確認 `repository.Orders` 滿足 `OrderStore`、`repository.Carts` 滿足 `CheckoutCart`。測試的 `stampede` 函式收的參數型別是 `service.OrderStore`，所以 `naiveOrders` 與 `repository.Orders` 都能傳進去。整個專案編譯通過。",
+      "claim_en": "The `service` package declares the interfaces it needs: `OrderStore` has 1 method, `Place`, and `CheckoutCart` has 2 methods, `Items` and `RemoveItem`. `cmd/api/main.go` holds compile-time assertions that `repository.Orders` satisfies `OrderStore` and `repository.Carts` satisfies `CheckoutCart`. The test helper `stampede` takes a `service.OrderStore`, so both `naiveOrders` and `repository.Orders` can be passed to it. The project builds.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/order.go",
+          "pattern": "type OrderStore interface \\{\\n\\tPlace\\(.*\\n\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/order.go",
+          "pattern": "type CheckoutCart interface \\{\\n\\tItems\\(.*\\n\\tRemoveItem\\(.*\\n\\}"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "_ service\\.CheckoutCart = \\(\\*repository\\.Carts\\)\\(nil\\)"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "_ service\\.OrderStore\\s+= \\(\\*repository\\.Orders\\)\\(nil\\)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "func stampede(t *testing.T, store service.OrderStore) (bought, soldOut int) {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "stampede(t, naiveOrders{pool})"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/orders_integration_test.go",
+          "text": "stampede(t, repository.NewOrders(slowBegin{pool}))"
+        },
+        {
+          "type": "run",
+          "cmd": ["go", "build", "./..."]
+        }
+      ]
+    },
+    {
+      "id": "C6-10",
+      "kind": "repo",
+      "claim": "`OrderService.Checkout` 把 `repository.ErrOutOfStock` 換成 `service.ErrOutOfStock`，把 `repository.ErrProductNotFound` 換成 `service.ErrProductNotFound`。`handler` 把前者變成 HTTP 409（錯誤碼 `out_of_stock`），後者變成 404，其他未知的錯誤變成 500，而且回應內容不含錯誤裡的位址。單元測試 `TestCheckoutRoute` 與 `TestCheckout_ErrorsAreTranslatedAndKeepTheCart` 證明，後者還確認失敗時購物車沒被動過。",
+      "claim_en": "`OrderService.Checkout` translates `repository.ErrOutOfStock` into `service.ErrOutOfStock` and `repository.ErrProductNotFound` into `service.ErrProductNotFound`. The `handler` turns the first into HTTP 409 (code `out_of_stock`), the second into 404, and any other unknown error into 500 whose body does not contain the address in the error. The unit tests `TestCheckoutRoute` and `TestCheckout_ErrorsAreTranslatedAndKeepTheCart` prove it, and the second also confirms the cart is untouched on failure.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "case errors.Is(err, repository.ErrOutOfStock):\n\t\treturn Order{}, fmt.Errorf(\"checkout: %w: %w\", ErrOutOfStock, err)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "case errors.Is(err, repository.ErrProductNotFound):\n\t\treturn Order{}, fmt.Errorf(\"checkout: %w: %w\", ErrProductNotFound, err)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "status, body = http.StatusConflict, api.Error{Code: \"out_of_stock\", Message: \"not enough stock\"}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go", "test", "-count=1",
+            "-run", "^TestCheckoutRoute$",
+            "-v", "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestCheckoutRoute/database_failure_is_a_500"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go", "test", "-count=1",
+            "-run", "^TestCheckoutRoute$",
+            "-v", "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestCheckoutRoute/out_of_stock_is_a_409"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go", "test", "-count=1",
+            "-run", "^TestCheckoutRoute$",
+            "-v", "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestCheckoutRoute/vanished_product_is_a_404"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go", "test", "-count=1",
+            "-run", "^TestCheckout_ErrorsAreTranslatedAndKeepTheCart$",
+            "-v", "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestCheckout_ErrorsAreTranslatedAndKeepTheCart"
+        }
+      ]
+    },
+    {
+      "id": "C6-11",
+      "kind": "repo",
+      "claim": "壓力測試腳本 `scripts/k6/oversell.js` 用 50 個虛擬使用者，每人執行 1 次：把螢幕放進自己的購物車，再送出結帳。購物車依 session cookie 區分（`handler` 用 `SessionID` 取得購物車編號），腳本註解寫明每個虛擬使用者有自己的 cookie jar，所以各有自己的購物車。門檻是 `orders_bought` 的計數等於 1、`orders_sold_out` 的計數等於 49。每個回應都要檢查是 201 或 409。",
+      "claim_en": "The load-test script `scripts/k6/oversell.js` uses 50 virtual users running 1 iteration each: each puts the monitor in its own cart and then checks out. Carts are told apart by the session cookie (the `handler` takes the cart id from `SessionID`), and a script comment states that every virtual user has its own cookie jar, so each has its own cart. The thresholds are an `orders_bought` count of 1 and an `orders_sold_out` count of 49. Every response is checked to be 201 or 409.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "stampede: { executor: \"per-vu-iterations\", vus: 50, iterations: 1, maxDuration: \"30s\" },"
+        },
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "orders_bought: [\"count==1\"],"
+        },
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "orders_sold_out: [\"count==49\"],"
+        },
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "r.status === 201 || r.status === 409"
+        },
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "http.put(`${BASE}/cart/items/${MONITOR}`"
+        },
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "// Every virtual user is a separate browser (own cookie jar, so own session and own cart)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "const sessionCookie = \"sid\""
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/cart.go",
+          "pattern": "id := SessionID\\(r\\.Context\\(\\)\\)\\n(.*\\n)*?\\tcart, err := s\\.carts\\.SetItem\\(r\\.Context\\(\\), id, productID, in\\.Quantity\\)"
+        },
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "http.post(`${BASE}/checkout`)"
+        }
+      ]
+    },
+    {
+      "id": "X6-1",
+      "kind": "reference",
+      "claim": "C# 的 `TransactionScope` 在程式裡建立交易範圍，呼叫 `Complete` 才會提交。Spring 的 `@Transactional` 註解讓框架在方法前後開始與提交交易。Go 的標準函式庫沒有這兩種機制，交易由程式自己呼叫 `Begin`、`Commit`、`Rollback`。",
+      "claim_en": "C# `TransactionScope` creates a transaction scope in code and commits only when `Complete` is called. Spring's `@Transactional` annotation lets the framework begin and commit a transaction around a method. Go's standard library has neither: the program itself calls `Begin`, `Commit` and `Rollback`.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.transactions.transactionscope",
+        "https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html",
+        "https://go.dev/doc/database/execute-transactions"
+      ]
+    },
+    {
+      "id": "X6-2",
+      "kind": "reference",
+      "claim": "PostgreSQL 的 `SELECT ... FOR UPDATE` 會鎖住查到的列，直到交易結束；別的交易要更新或鎖同一列時要等待。",
+      "claim_en": "PostgreSQL's `SELECT ... FOR UPDATE` locks the selected rows until the transaction ends; other transactions that want to update or lock the same rows wait.",
+      "sources": [
+        "https://www.postgresql.org/docs/current/explicit-locking.html"
+      ]
+    }
+  ]
+}

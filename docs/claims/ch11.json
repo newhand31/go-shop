@@ -1,0 +1,717 @@
+{
+  "chapter": "ch11",
+  "title": "半夜查不到原因",
+  "tag": "ep11",
+  "claims": [
+    {
+      "id": "C11-1",
+      "kind": "repo",
+      "claim": "tag `ep10` 的程式碼還沒有 `telemetry` 套件，也沒有 `observe.go`；整個 `*.go` 裡沒有 `trace_id` 這個字，也沒有任何 `go.opentelemetry.io` 的 import。`ep10` 的 log 用沒有 ctx 的 `logger.Info(\"request\", ...)` 寫出請求紀錄，只有 `method`、`path`、`status`、`duration_ms` 四個欄位，logger 是純 JSON handler。這些都是這一章新增的。",
+      "claim_en": "The code at tag `ep10` has no `telemetry` package and no `observe.go`, and the word `trace_id` appears in no `*.go` file, nor does any `go.opentelemetry.io` import. `ep10` writes the request log with `logger.Info(\"request\", ...)`, which takes no ctx, with only four fields, `method`, `path`, `status` and `duration_ms`, through a plain JSON handler. All of this is added in this chapter.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep10:internal/platform/telemetry/telemetry.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep10:internal/handler/observe.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "trace_id",
+            "ep10",
+            "--",
+            "*.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "logger.Info(\"request\",",
+            "ep10",
+            "--",
+            "internal/handler/handler.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "slog.New(slog.NewJSONHandler(os.Stdout, nil))",
+            "ep10",
+            "--",
+            "cmd/api/main.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "\"method\", r.Method,",
+            "ep10",
+            "--",
+            "internal/handler/handler.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "\"path\", r.URL.Path,",
+            "ep10",
+            "--",
+            "internal/handler/handler.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "\"status\", rec.status,",
+            "ep10",
+            "--",
+            "internal/handler/handler.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "\"duration_ms\", time.Since(start).Milliseconds(),",
+            "ep10",
+            "--",
+            "internal/handler/handler.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-n",
+            "-A5",
+            "-F",
+            "-e",
+            "logger.Info(\"request\",",
+            "ep10",
+            "--",
+            "internal/handler/handler.go"
+          ],
+          "output_contains": "ep10:internal/handler/handler.go:97:\t\t\tlogger.Info(\"request\",\nep10:internal/handler/handler.go-98-\t\t\t\t\"method\", r.Method,\nep10:internal/handler/handler.go-99-\t\t\t\t\"path\", r.URL.Path,\nep10:internal/handler/handler.go-100-\t\t\t\t\"status\", rec.status,\nep10:internal/handler/handler.go-101-\t\t\t\t\"duration_ms\", time.Since(start).Milliseconds(),\nep10:internal/handler/handler.go-102-\t\t\t)\n"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "go.opentelemetry.io",
+            "ep10",
+            "--",
+            "*.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep11:internal/platform/telemetry/telemetry.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep11:internal/handler/observe.go"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C11-2",
+      "kind": "repo",
+      "claim": "環境變數 `OTEL_TRACES_EXPORTER` 沒設或設成 `none` 時，`NewTracerProvider` 不接任何 exporter；設成 `stdout` 時，用批次方式把 span 以 JSON 寫到 stderr；其他值回傳錯誤。`main` 在啟動時用 `otel.SetTracerProvider` 把它裝成全域的，並用 `defer` 登記：`main` 結束前，用 5 秒期限的 context 呼叫 `telemetry.Shutdown`，把批次佇列裡的 span 寫出去。測試 `TestStdoutExporterWritesTheSpan` 證明。",
+      "claim_en": "When `OTEL_TRACES_EXPORTER` is unset or `none`, `NewTracerProvider` attaches no exporter; with `stdout` it writes spans as JSON to stderr in batches; any other value returns an error. At startup, `main` installs it as the global provider with `otel.SetTracerProvider` and registers a `defer`: before `main` exits, the `defer` calls `telemetry.Shutdown` with a 5-second context to write out the spans in the batch queue. The test `TestStdoutExporterWritesTheSpan` proves this.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/platform/telemetry/telemetry.go",
+          "pattern": "ExporterNone\\s+= \"none\""
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/telemetry/telemetry.go",
+          "pattern": "ExporterStdout\\s+= \"stdout\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/telemetry.go",
+          "text": "case \"\", ExporterNone:"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/telemetry.go",
+          "text": "exp, err := stdouttrace.New(stdouttrace.WithWriter(out))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/telemetry.go",
+          "text": "opts = append(opts, sdktrace.WithBatcher(exp))"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "otel.SetTracerProvider(tp)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "telemetry.NewTracerProvider(os.Getenv(\"OTEL_TRACES_EXPORTER\"), os.Stderr)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "context.WithTimeout(context.Background(), 5*time.Second)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "telemetry.Shutdown(flushCtx, tp)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestStdoutExporterWritesTheSpan$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestStdoutExporterWritesTheSpan"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestUnknownExporterIsRejected$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestUnknownExporterIsRejected"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "otel\\.SetTracerProvider\\(tp\\)\\n\\tdefer func\\(\\) \\{\\n\\t\\tflushCtx, cancel := context\\.WithTimeout\\(context\\.Background\\(\\), 5\\*time\\.Second\\)"
+        }
+      ]
+    },
+    {
+      "id": "C11-3",
+      "kind": "repo",
+      "claim": "`cmd/api/main.go` 用 `otelhttp.NewHandler` 包住整個商店，名稱是 `shop`，所以每個請求在其他中介層之前先開一個 span。`GET /metrics` 掛在同一個 `http.ServeMux` 上、商店旁邊，不經過限流器和 session：限流器與 session 只接在商店的 handler 上，`mux` 建立之後的程式碼不再出現它們。",
+      "claim_en": "`cmd/api/main.go` wraps the whole shop in `otelhttp.NewHandler`, named `shop`, so every request gets a span before any other middleware runs. `GET /metrics` is registered on the same `http.ServeMux`, beside the shop, outside the rate limiter and the session: both are attached only to the shop handler, and no code after `mux` is created mentions them.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "shop := otelhttp.NewHandler(handler.WithPaymentCallback(apiHandler, payments, logger, handler.Instrument(metrics)), \"shop\", otelhttp.WithTracerProvider(tp))"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "mux.Handle(\"GET /metrics\", metrics.Handler())"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "mux.Handle(\"/\", shop)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "srv := &http.Server{Addr: \":\" + port, Handler: mux}"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "handler\\.RateLimit\\(limiter, logger\\),\\n\\t\\thandler\\.Session\\(sessions, sessionTTL, logger\\),\\n\\t\\)"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "(?s)mux := http\\.NewServeMux\\(\\)(?:[^RS]|R(?:[^a]|\\z)|S(?:[^e]|e(?:[^s]|\\z)|\\z))*\\z"
+        }
+      ]
+    },
+    {
+      "id": "C11-4",
+      "kind": "repo",
+      "claim": "`Checkout` 手動開一個子 span，名稱是 `order.place`，只包住 `s.store.Place`，也就是跟 PostgreSQL 講話的那一段。下單失敗時，span 記錄錯誤並把狀態設成 error。`Place` 回傳後 span 就結束；`Checkout` 後面清購物車仍用原本的 `ctx`，不是 `placeCtx`。資料庫與 Redis 的呼叫沒有各自的 span：`go.mod` 和 `*.go` 裡沒有 `otelpgx`、`redisotel`、`otelsql`。除了測試，`cmd` 與 `internal` 裡只有 `internal/service/order.go` 呼叫 `Tracer(`。",
+      "claim_en": "`Checkout` opens one hand-made child span named `order.place` around `s.store.Place` only, the part that talks to PostgreSQL. On failure the span records the error and sets its status to error. The span ends once `Place` returns; the cart cleanup after it still uses the original `ctx`, not `placeCtx`. Database and Redis calls have no spans of their own: `go.mod` and `*.go` contain no `otelpgx`, `redisotel` or `otelsql`. Outside tests, only `internal/service/order.go` under `cmd` and `internal` calls `Tracer(`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "placeCtx, span := otel.Tracer(\"go-shop/service\").Start(ctx, \"order.place\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "placed, err := s.store.Place(placeCtx, lines)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "span.RecordError(err)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "span.SetStatus(codes.Error, \"place order failed\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "s.carts.RemoveItem(ctx, cartID, l.ProductID)"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/order.go",
+          "pattern": "span\\.SetStatus\\(codes\\.Error, \"place order failed\"\\)\\n\\t\\}\\n\\tspan\\.End\\(\\)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-E",
+            "-e",
+            "otelpgx|redisotel|otelsql",
+            "ep11",
+            "--",
+            "*.go",
+            "go.mod"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "Tracer(",
+            "ep11",
+            "--",
+            "cmd",
+            "internal",
+            ":!internal/service/order.go",
+            ":!*_test.go"
+          ],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C11-5",
+      "kind": "repo",
+      "claim": "`telemetry.NewLogHandler` 回傳的 `slog.Handler` 包住內層 handler。ctx 裡有有效的 span 時，它在每筆紀錄加上 `trace_id` 與 `span_id` 兩個欄位。`WithAttrs` 與 `WithGroup` 也回傳包過的 `logHandler`，所以 `logger.With` 與 `WithGroup` 之後 trace id 還在。把 `WithAttrs` 改成直接回傳內層 handler，測試 `TestLogHandler/survives_logger.With` 就失敗。",
+      "claim_en": "The `slog.Handler` returned by `telemetry.NewLogHandler` wraps an inner handler. When the ctx carries a valid span, it adds two fields, `trace_id` and `span_id`, to each record. `WithAttrs` and `WithGroup` also return the wrapped `logHandler`, so the trace id survives `logger.With` and `WithGroup`. Changing `WithAttrs` to return the inner handler directly makes the test `TestLogHandler/survives_logger.With` fail.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/slog.go",
+          "text": "type logHandler struct{ inner slog.Handler }"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/slog.go",
+          "text": "sc := trace.SpanContextFromContext(ctx); sc.IsValid()"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/slog.go",
+          "text": "slog.String(\"trace_id\", sc.TraceID().String()), slog.String(\"span_id\", sc.SpanID().String())"
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/telemetry/slog.go",
+          "pattern": "func \\(h logHandler\\) WithAttrs\\(attrs \\[\\]slog.Attr\\) slog.Handler \\{\\n\\treturn logHandler\\{inner: h.inner.WithAttrs\\(attrs\\)\\}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/telemetry/slog.go",
+          "pattern": "func \\(h logHandler\\) WithGroup\\(name string\\) slog.Handler \\{\\n\\treturn logHandler\\{inner: h.inner.WithGroup\\(name\\)\\}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestLogHandler$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestLogHandler/with_a_span_in_the_context"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestLogHandler$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestLogHandler/survives_logger.With "
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestLogHandler$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestLogHandler/survives_logger.WithGroup"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestLogHandler$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestLogHandler/background_context_has_no_span"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestLogHandler$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "edit": {
+            "file": "internal/platform/telemetry/slog.go",
+            "old": "return logHandler{inner: h.inner.WithAttrs(attrs)}",
+            "new": "return h.inner.WithAttrs(attrs)"
+          },
+          "exit": "nonzero",
+          "output_contains": "--- FAIL: TestLogHandler/survives_logger.With "
+        }
+      ]
+    },
+    {
+      "id": "C11-6",
+      "kind": "repo",
+      "claim": "沒有 ctx 的 `logger.Info` 寫出來的紀錄沒有 trace id，測試 `TestLogHandler/plain_Info_has_no_context_to_read` 重現。這一章把請求紀錄、`writeError` 的失敗原因、`Recover` 的 panic 紀錄、金流回呼的兩筆紀錄，以及下單後清購物車的警告，都改成帶 ctx 的 `InfoContext`、`ErrorContext`、`WarnContext`。",
+      "claim_en": "A plain `logger.Info` call, with no ctx, writes a record without a trace id; the test `TestLogHandler/plain_Info_has_no_context_to_read` replays it. This chapter switches the request log, the failure reason in `writeError`, the panic record in `Recover`, the two payment-callback records, and the warning when the cart is not emptied after an order to the ctx-taking `InfoContext`, `ErrorContext` and `WarnContext`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestLogHandler$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestLogHandler/plain_Info_has_no_context_to_read"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "logger.InfoContext(r.Context(), \"request\","
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "logger.ErrorContext(r.Context(), \"request failed\", \"err\", err)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "logger.ErrorContext(r.Context(), \"panic recovered\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "logger.WarnContext(r.Context(), \"payment callback rejected\", \"err\", err)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "logger.ErrorContext(r.Context(), \"payment callback failed\", \"err\", err)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/order.go",
+          "text": "s.logger.WarnContext(ctx, \"order placed but cart not emptied\""
+        }
+      ]
+    },
+    {
+      "id": "C11-7",
+      "kind": "repo",
+      "claim": "`telemetry.NewMetrics` 在自己的 Prometheus registry 加兩個 HTTP 指標：計數器 `http_requests_total`，標籤是 `method`、`route`、`status`；直方圖 `http_request_duration_seconds`，標籤是 `method`、`route`。`Metrics.Handler` 提供 Prometheus 抓取用的文字格式。測試 `TestMetricsObserve` 證明。",
+      "claim_en": "`telemetry.NewMetrics` adds two HTTP metrics to its own Prometheus registry: the counter `http_requests_total` with labels `method`, `route`, `status`, and the histogram `http_request_duration_seconds` with labels `method`, `route`. `Metrics.Handler` serves the text format Prometheus scrapes. The test `TestMetricsObserve` proves it.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/metrics.go",
+          "text": "reg := prometheus.NewRegistry()"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/metrics.go",
+          "text": "Name: \"http_requests_total\","
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/metrics.go",
+          "text": "}, []string{\"method\", \"route\", \"status\"}),"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/metrics.go",
+          "text": "Name:    \"http_request_duration_seconds\","
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/metrics.go",
+          "text": "}, []string{\"method\", \"route\"}),"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/telemetry/metrics.go",
+          "text": "return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestMetricsObserve$",
+            "-v",
+            "./internal/platform/telemetry"
+          ],
+          "output_contains": "--- PASS: TestMetricsObserve"
+        }
+      ]
+    },
+    {
+      "id": "C11-8",
+      "kind": "repo",
+      "claim": "`Instrument` 用 chi 比對到的路由樣式（例如 `/products/{id}`）當 `route` 標籤，不用原始路徑，而且在 `next.ServeHTTP` 跑完之後才讀。沒有路由認領的請求，以及 `Mount` 產生的 `/*`，標籤都是 `unmatched`。測試 `TestMetricsExposeTheRoutePatternNotThePath` 打 `/products/1`、`/products/2` 各一次和一次不存在的路徑：`/products/{id}` 的次數是 2，`unmatched` 的 404 次數是 1，`/metrics` 輸出裡沒有原始路徑。",
+      "claim_en": "`Instrument` uses the route pattern chi matched (for example `/products/{id}`) as the `route` label, never the raw path, and reads it after `next.ServeHTTP` has finished. Requests no route claimed, and the `/*` that `Mount` creates, are labelled `unmatched`. The test `TestMetricsExposeTheRoutePatternNotThePath` requests `/products/1` and `/products/2` once each plus one unknown path: `/products/{id}` counts 2, `unmatched` counts one 404, and the `/metrics` output holds no raw path.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/handler/observe.go",
+          "pattern": "next\\.ServeHTTP\\(rec, r\\)\\n\\t\\t\\tfinished = true"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/observe.go",
+          "text": "obs.Observe(r.Method, routeLabel(r), rec.status, time.Since(start))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/observe.go",
+          "text": "if p := rc.RoutePattern(); p != \"\" && p != \"/*\" {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/observe.go",
+          "text": "const unmatchedRoute = \"unmatched\""
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestMetricsExposeTheRoutePatternNotThePath$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestMetricsExposeTheRoutePatternNotThePath"
+        }
+      ]
+    },
+    {
+      "id": "C11-9",
+      "kind": "repo",
+      "claim": "`main` 把 `Instrument` 排在限流器前面，所以被限流的 429 也計數，標籤是 `unmatched`。`Instrument` 用 `defer` 計數，handler panic 時記成 500。測試 `TestMetricsCountRateLimitedAndPanickedRequests` 證明這兩種情況都進得了 `/metrics`。",
+      "claim_en": "`main` puts `Instrument` before the rate limiter, so a rate-limited 429 is counted, labelled `unmatched`. `Instrument` counts in a `defer`, and records a handler panic as 500. The test `TestMetricsCountRateLimitedAndPanickedRequests` proves both reach `/metrics`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "handler.Instrument(metrics), // before the limiter, so a 429 is counted too"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/observe.go",
+          "pattern": "defer func\\(\\) \\{\\n\\t\\t\\t\\tif !finished \\{\\n\\t\\t\\t\\t\\trec\\.status = http\\.StatusInternalServerError"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestMetricsCountRateLimitedAndPanickedRequests$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestMetricsCountRateLimitedAndPanickedRequests"
+        }
+      ]
+    },
+    {
+      "id": "C11-10",
+      "kind": "repo",
+      "claim": "測試 `TestRequestLogCarriesTheTraceID` 用跟 `main` 同樣的層次：最外層 `otelhttp`，裡面是路由、`RequestLog`、`Instrument`。它打一個 `GET /products/1`，解析那一行 log：`trace_id` 等於 handler 自己從 ctx 讀到的 trace id，而且有 `span_id`。",
+      "claim_en": "The test `TestRequestLogCarriesTheTraceID` uses the same layering as `main`: `otelhttp` outermost, then the router, `RequestLog` and `Instrument`. It sends one `GET /products/1` and parses the log line: `trace_id` equals the trace id the handler itself reads from the ctx, and `span_id` is present.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestRequestLogCarriesTheTraceID$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestRequestLogCarriesTheTraceID"
+        }
+      ]
+    },
+    {
+      "id": "C11-11",
+      "kind": "repo",
+      "claim": "測試 `TestCheckout_RecordsAChildSpan` 證明 `order.place` 是請求 span 的子 span；下單成功時狀態不是 error，`store_fails` 情況下狀態是 error。",
+      "claim_en": "The test `TestCheckout_RecordsAChildSpan` proves `order.place` is a child of the request span; its status is not error on success and is error in the `store_fails` case.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestCheckout_RecordsAChildSpan$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestCheckout_RecordsAChildSpan/success"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestCheckout_RecordsAChildSpan$",
+            "-v",
+            "./internal/service"
+          ],
+          "output_contains": "--- PASS: TestCheckout_RecordsAChildSpan/store_fails"
+        }
+      ]
+    },
+    {
+      "id": "X11-1",
+      "kind": "reference",
+      "claim": "Java 的 `ThreadLocal` 把值綁在執行緒上，每條執行緒讀到自己的那一份。Go 沒有這種綁定，值放在 `context.Context`，明確傳給每一個需要它的函式，慣例是放第一個參數。",
+      "claim_en": "Java `ThreadLocal` binds a value to a thread: each thread reads its own copy. Go has no such binding; the value lives in a `context.Context` that is passed explicitly to each function that needs it, by convention as the first parameter.",
+      "sources": [
+        "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ThreadLocal.html",
+        "https://pkg.go.dev/context"
+      ]
+    }
+  ]
+}
