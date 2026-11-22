@@ -1,11 +1,11 @@
 # TODO
 
-- [ ] **把其餘 14 章改成平實口播並補主張清單**（交接自「go-shop#21｜第5章平實口播＋主張清單試作｜待拍板」）
-  - 目標：15 章都有平實口播、主張清單、逐字稿；合成一支分章節的長片（約 90 分），每章另出一支 Short。
-  - 現況：第 5 章試作完成（PR #21）。長片片段 6 分 20 秒、Short 45 秒；`make claims` 是 11 passed、0 failed、0 skipped、1 reference。等使用者看過試作、說要調哪些規則，才開始批次改。
-  - 現況：已定的決策見 `state/DECISIONS.md` 2026-11-23「文案：平實口播＋主張清單」。口播正本是影片產線 repo 的分鏡 JSON，逐字稿由它產生，不手寫。
-  - 現況：還沒做的有 `docs/style-guide.md`、README（中英）與 `docs/episodes.md` 更新、長片合成與章節時間戳、英文版。這個 repo 沒有 CI，主張只能在本機跑 `make claims`。
-  - 現況：試作留下的小問題：口播唸出的行號沒有機器檢查；事故故事是情境，只由測試重現；X5-1 的 C# 與 Java 寫法沒有附來源；`claimcheck` 的暫存目錄清理沒有用 defer。
-  - 檔案：`docs/claims/chNN.json`、`docs/transcripts/`、`cmd/claimcheck/`、`docs/claims/README.md`；影片產線 repo 的 `episodes/chNN/storyboard.json`、`episodes/shortNN/storyboard.json`。
-  - 完成的樣子：每章有 `docs/claims/chNN.json` 與 `docs/transcripts/chNN.md`；`go run ./cmd/claimcheck -strict` 結束碼 0；每章的長片片段與 Short 都算得出來，字幕檔引用的主張編號都存在。
-  - 工作鍵：newhand31/go-shop:feat/plain-rollout
+- [ ] **補平實口播版的收尾項目**（交接自「go-shop｜其餘 12 章改平實口播＋主張清單｜待併」）
+  - 目標：平實口播版可以公開發佈：配音合法、主張有 CI 守著、13 章規則一致。
+  - 現況：13 章都有主張清單（`docs/claims/ch01.json`–`ch13.json`）與逐字稿（`docs/transcripts/`）；`go run ./cmd/claimcheck -strict` 全數通過。長片 1 小時 24 分 55 秒、13 支 Short 都已在影片產線 repo 算出，章節時間戳在 `docs/transcripts/chapters.txt`。
+  - 現況：每一章都由全新 context 的檢查員對過 tag 的程式碼，找到的問題已修；修完之後沒有再做第二輪獨立檢查。
+  - 現況：還沒做的有五項。一，配音是暫時的 TTS，公開前要換真人錄音或正式授權的 TTS。二，這個 repo 沒有 CI，主張只在本機跑。三，第 5 章口播還唸行號，與 `docs/plain-style-guide.md` 第 2 節不一致。四，第 4、7、8、10 章的事故情境沒有測試或壓測重現。五，英文版還沒寫（規範第 6 節）。
+  - 現況：ch01 的 C1-1 引用了一個 commit 編號，歷史改寫後會失效。README（中英）還沒介紹主張清單。
+  - 檔案：`docs/plain-style-guide.md`、`docs/claims/`、`docs/transcripts/`、`cmd/claimcheck/`、`README.md`；影片產線 repo 的 `episodes/chNN/storyboard.json`、`episodes/shortNN/storyboard.json`。
+  - 完成的樣子：CI 在每次 push 跑 `go run ./cmd/claimcheck -strict` 且結束碼 0；第 5 章口播不唸行號並重算；配音來源有書面授權或是真人錄音；README 有一節說明怎麼查證主張。
+  - 工作鍵：newhand31/go-shop:feat/plain-followups
