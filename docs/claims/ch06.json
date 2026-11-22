@@ -177,13 +177,18 @@
     {
       "id": "C6-7",
       "kind": "repo",
-      "claim": "同樣 20 個買家搶 1 台螢幕，改走真的 `repository.Orders` 之後（測試包了 `slowBegin`，讓每個交易在每次寫入前暫停 50 毫秒），剛好 1 個買家成功、19 個得到缺貨，資料表裡有 1 張訂單、庫存是 0。測試 `TestOversell_WithForUpdateExactlyTheStockIsSold` 證明。把查詢裡的 `FOR UPDATE` 拿掉，這個測試就失敗，輸出含 `products_stock_check`：資料表的 `CHECK` 擋住負庫存，但有買家收到的是資料庫錯誤，不是缺貨。",
-      "claim_en": "With the same 20 buyers and 1 monitor going through the real `repository.Orders` (the test wraps it in `slowBegin`, which pauses every transaction for 50 milliseconds before each write), exactly 1 buyer succeeds, 19 are told it is sold out, the table holds 1 order and the stock is 0. The test `TestOversell_WithForUpdateExactlyTheStockIsSold` proves it. Remove `FOR UPDATE` from the query and this test fails, with `products_stock_check` in the output: the table's `CHECK` blocks the negative stock, but some buyers receive a database error instead of a sold-out answer.",
+      "claim": "同樣 20 個買家搶 1 台螢幕，改走真的 `repository.Orders` 之後（測試包了 `slowBegin`，讓每個交易在每次呼叫 `Exec` 前暫停 50 毫秒；`slowTx` 只覆寫 `Exec`，`QueryRow` 不暫停），剛好 1 個買家成功、19 個得到缺貨，資料表裡有 1 張訂單、庫存是 0。測試 `TestOversell_WithForUpdateExactlyTheStockIsSold` 證明。把查詢裡的 `FOR UPDATE` 拿掉，這個測試就失敗，輸出含 `products_stock_check`：資料表的 `CHECK` 擋住負庫存，但有買家收到的是資料庫錯誤，不是缺貨。",
+      "claim_en": "With the same 20 buyers and 1 monitor going through the real `repository.Orders` (the test wraps it in `slowBegin`, which pauses every transaction for 50 milliseconds before each `Exec` call; `slowTx` overrides only `Exec`, so `QueryRow` does not pause), exactly 1 buyer succeeds, 19 are told it is sold out, the table holds 1 order and the stock is 0. The test `TestOversell_WithForUpdateExactlyTheStockIsSold` proves it. Remove `FOR UPDATE` from the query and this test fails, with `products_stock_check` in the output: the table's `CHECK` blocks the negative stock, but some buyers receive a database error instead of a sold-out answer.",
       "checks": [
         {
           "type": "contains",
           "file": "internal/repository/orders_integration_test.go",
           "text": "func (t slowTx) Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error) {\n\ttime.Sleep(50 * time.Millisecond)"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-e", "slowTx) QueryRow", "ep06", "--", "internal/repository/orders_integration_test.go"],
+          "exit": "nonzero"
         },
         {
           "type": "contains",
@@ -386,8 +391,8 @@
     {
       "id": "C6-11",
       "kind": "repo",
-      "claim": "壓力測試腳本 `scripts/k6/oversell.js` 用 50 個虛擬使用者，每人執行 1 次：把螢幕放進自己的購物車，再送出結帳。門檻是 `orders_bought` 的計數等於 1、`orders_sold_out` 的計數等於 49。每個回應都要檢查是 201 或 409。",
-      "claim_en": "The load-test script `scripts/k6/oversell.js` uses 50 virtual users running 1 iteration each: each puts the monitor in its own cart and then checks out. The thresholds are an `orders_bought` count of 1 and an `orders_sold_out` count of 49. Every response is checked to be 201 or 409.",
+      "claim": "壓力測試腳本 `scripts/k6/oversell.js` 用 50 個虛擬使用者，每人執行 1 次：把螢幕放進自己的購物車，再送出結帳。購物車依 session cookie 區分（`handler` 用 `SessionID` 取得購物車編號），腳本註解寫明每個虛擬使用者有自己的 cookie jar，所以各有自己的購物車。門檻是 `orders_bought` 的計數等於 1、`orders_sold_out` 的計數等於 49。每個回應都要檢查是 201 或 409。",
+      "claim_en": "The load-test script `scripts/k6/oversell.js` uses 50 virtual users running 1 iteration each: each puts the monitor in its own cart and then checks out. Carts are told apart by the session cookie (the `handler` takes the cart id from `SessionID`), and a script comment states that every virtual user has its own cookie jar, so each has its own cart. The thresholds are an `orders_bought` count of 1 and an `orders_sold_out` count of 49. Every response is checked to be 201 or 409.",
       "checks": [
         {
           "type": "contains",
@@ -413,6 +418,21 @@
           "type": "contains",
           "file": "scripts/k6/oversell.js",
           "text": "http.put(`${BASE}/cart/items/${MONITOR}`"
+        },
+        {
+          "type": "contains",
+          "file": "scripts/k6/oversell.js",
+          "text": "// Every virtual user is a separate browser (own cookie jar, so own session and own cart)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "const sessionCookie = \"sid\""
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/cart.go",
+          "pattern": "id := SessionID\\(r\\.Context\\(\\)\\)\\n(.*\\n)*?\\tcart, err := s\\.carts\\.SetItem\\(r\\.Context\\(\\), id, productID, in\\.Quantity\\)"
         },
         {
           "type": "contains",

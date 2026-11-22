@@ -6,12 +6,13 @@
     {
       "id": "C9-1",
       "kind": "repo",
-      "claim": "tag `ep08` 的程式碼沒有任何把庫存還回去的程式：沒有 `internal/service/expiry.go`，沒有 `internal/repository/expiry.go`，`ep08` 的 SQL 查詢裡也沒有 `IncreaseStock`。這三樣是 tag `ep09` 新增的。",
-      "claim_en": "The code at tag `ep08` has nothing that gives stock back: there is no `internal/service/expiry.go`, no `internal/repository/expiry.go`, and no `IncreaseStock` query. All three are added at tag `ep09`.",
+      "claim": "tag `ep08` 的程式碼沒有把庫存加回去的寫法：沒有 `internal/service/expiry.go`，沒有 `internal/repository/expiry.go`；在 `db`、`internal`、`cmd` 的非測試檔裡，找不到 `stock +`、`IncreaseStock`、`restock` 這類字，也就是沒有加回庫存的 SQL 或函式。`expiry.go` 兩個檔與 `IncreaseStock` 是 tag `ep09` 新增的。",
+      "claim_en": "The code at tag `ep08` has no way of adding stock back: there is no `internal/service/expiry.go` and no `internal/repository/expiry.go`; in the non-test files under `db`, `internal` and `cmd` there is no `stock +`, `IncreaseStock` or `restock`, so no SQL or function adds stock back. The two `expiry.go` files and `IncreaseStock` are added at tag `ep09`.",
       "checks": [
         { "type": "run", "cmd": ["git", "cat-file", "-e", "ep08:internal/service/expiry.go"], "exit": "nonzero" },
         { "type": "run", "cmd": ["git", "cat-file", "-e", "ep08:internal/repository/expiry.go"], "exit": "nonzero" },
         { "type": "run", "cmd": ["git", "grep", "-q", "-e", "IncreaseStock", "ep08", "--", "db/queries"], "exit": "nonzero" },
+        { "type": "run", "cmd": ["git", "grep", "-q", "-i", "-E", "stock *\\+|IncreaseStock|restock|ReturnStock|AddStock", "ep08", "--", "db", "internal", "cmd", ":!*_test.go"], "exit": "nonzero" },
         { "type": "run", "cmd": ["git", "cat-file", "-e", "ep09:internal/service/expiry.go"] },
         { "type": "run", "cmd": ["git", "cat-file", "-e", "ep09:internal/repository/expiry.go"] },
         { "type": "contains", "file": "db/queries/products.sql", "text": "-- name: IncreaseStock :exec" }
@@ -20,12 +21,14 @@
     {
       "id": "C9-2",
       "kind": "repo",
-      "claim": "種子資料裡「27 吋螢幕」是商品編號 3，庫存 1 件。一張下單後沒有付款的訂單，已經從庫存扣掉那 1 件，螢幕庫存變 0；訂單的 `paid_at` 欄位只有付款時才會被寫入。測試 `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` 的開頭先確認這個狀態。",
-      "claim_en": "In the seed data the 27-inch monitor is product 3 with a stock of 1. An order that was placed and never paid has already taken that 1 unit, so the monitor stock is 0; the order's `paid_at` is written only when a payment arrives. The test `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` first asserts this state.",
+      "claim": "種子資料裡「27 吋螢幕」是商品編號 3，庫存 1 件。一張下單後沒有付款的訂單，已經從庫存扣掉那 1 件，螢幕庫存變 0；訂單的 `paid_at` 欄位只有付款時才會被寫入：非測試的 SQL 與 Go 程式裡，只有 `payments.sql` 的 `UPDATE` 寫 `paid_at`（`dbgen` 裡有它產生的同一句），下單用的 `InsertOrder` 只寫 `total_twd`。測試 `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` 的開頭先確認這個狀態。",
+      "claim_en": "In the seed data the 27-inch monitor is product 3 with a stock of 1. An order that was placed and never paid has already taken that 1 unit, so the monitor stock is 0; the order's `paid_at` is written only when a payment arrives: in the non-test SQL and Go code only the `UPDATE` in `payments.sql` writes `paid_at` (the generated `dbgen` file holds the same statement), and `InsertOrder`, which places an order, writes only `total_twd`. The test `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` first asserts this state.",
       "checks": [
         { "type": "contains", "file": "db/migrations/00003_add_stock_and_orders.sql", "text": "UPDATE products SET stock = CASE id WHEN 3 THEN 1 ELSE 10 END;" },
         { "type": "contains", "file": "db/migrations/00002_seed_products.sql", "text": "('27 吋螢幕', 5990)" },
         { "type": "contains", "file": "db/queries/payments.sql", "text": "UPDATE orders SET paid_at = COALESCE(paid_at, now()) WHERE id = $1 AND total_twd = $2;" },
+        { "type": "run", "cmd": ["git", "grep", "-q", "-E", "paid_at *=", "ep09", "--", "db", "internal", ":!db/queries/payments.sql", ":!internal/repository/dbgen/payments.sql.go", ":!*_test.go"], "exit": "nonzero" },
+        { "type": "contains", "file": "db/queries/orders.sql", "text": "INSERT INTO orders (total_twd) VALUES ($1) RETURNING id;" },
         { "type": "contains", "file": "internal/repository/expiry_integration_test.go", "text": "if stockOf(t, pool, 1) != 8 || stockOf(t, pool, 3) != 0 {" },
         {
           "type": "run",

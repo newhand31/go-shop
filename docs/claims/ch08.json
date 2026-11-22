@@ -41,8 +41,8 @@
     {
       "id": "C8-2",
       "kind": "repo",
-      "claim": "`Orders.Place` 在同一個交易裡，用同一個 `q`，先寫訂單與訂單明細，再呼叫 `q.InsertOutbox` 寫一列 outbox，最後才 `tx.Commit`。`orders.go` 沒有任何寄信的呼叫。測試 `TestOutbox_PlaceWritesOneRowWithTheOrder` 證明下一張單，outbox 剛好多一列，主題是 `order_confirmation`。",
-      "claim_en": "`Orders.Place` writes the order and its lines, then calls `q.InsertOutbox` on the same `q` in the same transaction, and only then calls `tx.Commit`. `orders.go` contains no mail call. The test `TestOutbox_PlaceWritesOneRowWithTheOrder` proves that placing one order leaves exactly one outbox row with the topic `order_confirmation`.",
+      "claim": "`Orders.Place` 在同一個交易裡，用同一個 `q`，先寫訂單與訂單明細，再呼叫 `q.InsertOutbox` 寫一列 outbox，最後才 `tx.Commit`。`orders.go` 沒有寄信的呼叫：裡面沒有 `smtp`、`Mailer`、`SendOrderConfirmation` 或 `.Send...(` 這類字，也沒有 import 任何 `net/` 套件或 `service` 套件。測試 `TestOutbox_PlaceWritesOneRowWithTheOrder` 證明下一張單，outbox 剛好多一列，主題是 `order_confirmation`。",
+      "claim_en": "`Orders.Place` writes the order and its lines, then calls `q.InsertOutbox` on the same `q` in the same transaction, and only then calls `tx.Commit`. `orders.go` contains no mail call: it has none of `smtp`, `Mailer`, `SendOrderConfirmation` or a `.Send...(` call, and it imports no `net/` package and no `service` package. The test `TestOutbox_PlaceWritesOneRowWithTheOrder` proves that placing one order leaves exactly one outbox row with the topic `order_confirmation`.",
       "checks": [
         {
           "type": "matches",
@@ -56,7 +56,12 @@
         },
         {
           "type": "run",
-          "cmd": ["git", "grep", "-q", "-i", "-e", "mailer", "ep08", "--", "internal/repository/orders.go"],
+          "cmd": ["git", "grep", "-q", "-i", "-E", "smtp|mailer|SendOrderConfirmation|\\.Send[A-Za-z]*\\(|net/mail", "ep08", "--", "internal/repository/orders.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-E", "\"net/|internal/service\"", "ep08", "--", "internal/repository/orders.go"],
           "exit": "nonzero"
         },
         {
@@ -240,8 +245,8 @@
     {
       "id": "C8-10",
       "kind": "repo",
-      "claim": "`Outbox.Dispatch` 用 `context.WithoutCancel(ctx)` 取得 `recordCtx`，用它寫入「已寄出」與「失敗」的結果並提交交易；worker 正在關閉、`ctx` 已被取消時，寫入結果的呼叫也不會因此中止。",
-      "claim_en": "`Outbox.Dispatch` derives `recordCtx` with `context.WithoutCancel(ctx)` and uses it to write the sent and failed outcomes and to commit the transaction, so these writes are not aborted when `ctx` is already cancelled during shutdown.",
+      "claim": "`Outbox.Dispatch` 用 `context.WithoutCancel(ctx)` 取得 `recordCtx`，寫入「已寄出」與「失敗」的結果、提交交易，用的都是 `recordCtx`，不是 `ctx`；`recordCtx` 是 `context.WithoutCancel` 取得的另一個 context，不隨 `ctx` 取消。原始碼註解說明用意：關機時這些結果也要寫進去。這一條只說程式碼的寫法，沒有測試證明關機時的行為。",
+      "claim_en": "`Outbox.Dispatch` derives `recordCtx` with `context.WithoutCancel(ctx)` and uses it for writing the sent and failed outcomes and for committing the transaction, not `ctx`; `recordCtx` is another context from `context.WithoutCancel` that is not cancelled with `ctx`. A source comment gives the intent: the outcomes must be written even during shutdown. This claim covers how the code is written only; no test proves the behavior during shutdown.",
       "checks": [
         {
           "type": "contains",
@@ -262,6 +267,16 @@
           "type": "contains",
           "file": "internal/repository/outbox.go",
           "text": "tx.Commit(recordCtx)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/outbox.go",
+          "text": "Recording an outcome must survive a shutdown"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-q", "-E", "MarkOutboxSent(ctx|MarkOutboxFailed(ctx|tx.Commit(ctx", "ep08", "--", "internal/repository/outbox.go"],
+          "exit": "nonzero"
         }
       ]
     },

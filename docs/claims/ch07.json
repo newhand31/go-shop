@@ -6,8 +6,8 @@
     {
       "id": "C7-1",
       "kind": "repo",
-      "claim": "tag `ep06` 的程式碼還沒有金流回呼：沒有 `internal/payment/ecpay/ecpay.go`，也沒有 `db/migrations/00004_add_payments.sql`。這兩個檔案是這一章新增的。",
-      "claim_en": "The code at tag `ep06` has no payment callback yet: neither `internal/payment/ecpay/ecpay.go` nor `db/migrations/00004_add_payments.sql` exists. Both files are added in this chapter.",
+      "claim": "tag `ep06` 的程式碼還沒有金流回呼：沒有 `internal/payment/ecpay/ecpay.go`、`db/migrations/00004_add_payments.sql`、`internal/handler/payment.go`，也沒有 `internal/service/payment.go`。這四個檔案是這一章新增的。",
+      "claim_en": "The code at tag `ep06` has no payment callback yet: none of `internal/payment/ecpay/ecpay.go`, `db/migrations/00004_add_payments.sql`, `internal/handler/payment.go` and `internal/service/payment.go` exists. All four files are added in this chapter.",
       "checks": [
         {
           "type": "run",
@@ -40,12 +40,25 @@
         },
         {
           "type": "run",
-          "cmd": [
-            "git",
-            "cat-file",
-            "-e",
-            "ep07:db/migrations/00004_add_payments.sql"
-          ]
+          "cmd": ["git", "cat-file", "-e", "ep06:internal/handler/payment.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep06:internal/service/payment.go"],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:internal/handler/payment.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:internal/service/payment.go"]
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "cat-file", "-e", "ep07:db/migrations/00004_add_payments.sql"]
         }
       ]
     },
@@ -234,8 +247,8 @@
     {
       "id": "C7-5",
       "kind": "repo",
-      "claim": "`payments` 表的 `trade_no` 欄位宣告 `UNIQUE`。`InsertPayment` 的 SQL 用 `ON CONFLICT (trade_no) DO NOTHING`，所以重複的 `trade_no` 影響 0 列，不是錯誤。`Record` 在影響 0 列時回傳 `false, nil`。`db/queries/payments.sql` 裡沒有 `SELECT`，也就是沒有先查再寫。遷移檔的註解說明：同一個回呼重送時，`trade_no` 相同。",
-      "claim_en": "The `trade_no` column of the `payments` table is declared `UNIQUE`. The SQL of `InsertPayment` uses `ON CONFLICT (trade_no) DO NOTHING`, so a duplicate `trade_no` affects 0 rows instead of raising an error. `Record` returns `false, nil` when 0 rows were affected. `db/queries/payments.sql` contains no `SELECT`, so there is no check-then-write. The comment in the migration says `trade_no` is the same on every resend of the same callback.",
+      "claim": "`payments` 表的 `trade_no` 欄位宣告 `UNIQUE`。`InsertPayment` 的 SQL 用 `ON CONFLICT (trade_no) DO NOTHING`，所以重複的 `trade_no` 影響 0 列，不是錯誤。`Record` 在影響 0 列時回傳 `false, nil`。`db/queries/payments.sql` 裡沒有 `SELECT`，也就是沒有先查再寫。遷移檔的註解說明：同一個回呼重送時，`trade_no` 相同。`trade_no` 來自綠界回呼的 `TradeNo` 欄位；`ecpay.go` 的註解說明 `TradeNo` 是綠界的交易編號，每筆付款唯一、重送時相同；回呼沒有 `TradeNo` 就被拒絕。",
+      "claim_en": "The `trade_no` column of the `payments` table is declared `UNIQUE`. The SQL of `InsertPayment` uses `ON CONFLICT (trade_no) DO NOTHING`, so a duplicate `trade_no` affects 0 rows instead of raising an error. `Record` returns `false, nil` when 0 rows were affected. `db/queries/payments.sql` contains no `SELECT`, so there is no check-then-write. The comment in the migration says `trade_no` is the same on every resend of the same callback. `trade_no` comes from the `TradeNo` field of the ECPay callback; a comment in `ecpay.go` says `TradeNo` is ECPay's transaction number, unique per payment and identical on every resend; a callback without `TradeNo` is rejected.",
       "checks": [
         {
           "type": "matches",
@@ -276,6 +289,26 @@
           "type": "contains",
           "file": "db/migrations/00004_add_payments.sql",
           "text": "is the same on every resend of"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "TradeNo         string // ECPay's transaction number: unique per payment, identical on every resend"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "TradeNo:         params.Get(\"TradeNo\"),"
+        },
+        {
+          "type": "contains",
+          "file": "internal/payment/ecpay/ecpay.go",
+          "text": "if cb.MerchantTradeNo == \"\" || cb.TradeNo == \"\" {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/payment.go",
+          "text": "TradeNo: cb.TradeNo"
         }
       ]
     },
@@ -322,8 +355,8 @@
     {
       "id": "C7-7",
       "kind": "repo",
-      "claim": "回呼路由對綠界的回應有三種：處理成功回 200 與 `1|OK`；簽章、格式、金額或訂單不對（`ErrInvalidCallback`、`ErrPaymentMismatch`）回 400 與 `0|rejected`；其他錯誤（例如資料庫掛了）回 500 與 `0|error`，不回 `1|OK`。測試 `TestECPayCallbackRoute` 涵蓋這四種情況並通過。程式註解說明：綠界收到不是 `1|OK` 的回應就會重送。",
-      "claim_en": "The callback route answers ECPay in three ways: success returns 200 and `1|OK`; a bad signature, bad format, wrong amount or unknown order (`ErrInvalidCallback`, `ErrPaymentMismatch`) returns 400 and `0|rejected`; any other error (for example, the database is down) returns 500 and `0|error`, never `1|OK`. The test `TestECPayCallbackRoute` covers these four cases and passes. A code comment says ECPay resends when it gets a reply other than `1|OK`.",
+      "claim": "回呼路由對綠界的回應有四種：處理成功回 200 與 `1|OK`；請求內容讀不成表單（例如超過 16 KB 的上限）回 400 與 `0|bad form`；簽章、格式、金額或訂單不對（`ErrInvalidCallback`、`ErrPaymentMismatch`）回 400 與 `0|rejected`；其他錯誤（例如資料庫掛了）回 500 與 `0|error`，不回 `1|OK`。路由程式裡只有這四個 `reply` 呼叫。測試 `TestECPayCallbackRoute` 涵蓋成功、簽章或金額不對、其他錯誤這三類並通過；測試 `TestECPayCallbackRoute_OversizedBodyIsRejected` 證明超過上限的請求回 400。程式註解說明：綠界收到不是 `1|OK` 的回應就會重送。",
+      "claim_en": "The callback route answers ECPay in four ways: success returns 200 and `1|OK`; a body that cannot be read as a form (for example one over the 16 KB limit) returns 400 and `0|bad form`; a bad signature, bad format, wrong amount or unknown order (`ErrInvalidCallback`, `ErrPaymentMismatch`) returns 400 and `0|rejected`; any other error (for example, the database is down) returns 500 and `0|error`, never `1|OK`. The route code holds exactly these four `reply` calls. The test `TestECPayCallbackRoute` covers three of them (success, bad signature or amount, other error) and passes; the test `TestECPayCallbackRoute_OversizedBodyIsRejected` proves a request over the limit gets 400. A code comment says ECPay resends when it gets a reply other than `1|OK`.",
       "checks": [
         {
           "type": "contains",
@@ -347,6 +380,21 @@
         },
         {
           "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "if err := r.ParseForm(); err != nil {\n\t\t\treply(w, http.StatusBadRequest, \"0|bad form\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/payment.go",
+          "text": "const maxCallbackBytes = 16 << 10"
+        },
+        {
+          "type": "run",
+          "cmd": ["git", "grep", "-c", "-e", "reply(w, http\\.", "ep07", "--", "internal/handler/payment.go"],
+          "output_contains": "internal/handler/payment.go:4"
+        },
+        {
+          "type": "contains",
           "file": "internal/handler/payment_test.go",
           "text": "{\"our failure is not acknowledged\", errors.New(\"db down: 10.0.0.5\"), http.StatusInternalServerError, \"0|error\"}"
         },
@@ -367,6 +415,19 @@
             "./internal/handler"
           ],
           "output_contains": "--- PASS: TestECPayCallbackRoute "
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestECPayCallbackRoute_OversizedBodyIsRejected$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestECPayCallbackRoute_OversizedBodyIsRejected"
         }
       ]
     },

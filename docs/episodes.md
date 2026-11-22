@@ -2,7 +2,7 @@
 
 事故驅動：每集從一個線上事故開始，只引入一個主要 Go 概念，最後用測試或壓測證明修好。
 每集完成後在 `main` 打 tag（`ep01`…`ep12`、番外 `ep13-pitfalls`）。
-腳本骨架與語氣見 [style-guide.md](style-guide.md)。
+平實口播版的規則見 [plain-style-guide.md](plain-style-guide.md)，各章的主張清單在 [claims/](claims/)，逐字稿在 [transcripts/](transcripts/)。第一版幽默文案的腳本骨架與語氣見 [style-guide.md](style-guide.md)。
 
 > 「C# 對照」欄標 ＊ 的是 repo 建立時補的草案，錄製前再定。
 
