@@ -1,0 +1,152 @@
+{
+  "chapter": "ch05",
+  "title": "購物車換一台機器就空了",
+  "tag": "ep05",
+  "claims": [
+    {
+      "id": "C5-1",
+      "kind": "repo",
+      "claim": "`CartStore` 介面宣告在使用它的 `service` 套件，只列三個方法：`Items`、`SetItem`、`RemoveItem`。",
+      "claim_en": "The `CartStore` interface is declared in the `service` package that uses it and lists three methods: `Items`, `SetItem`, `RemoveItem`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/cart.go",
+          "pattern": "type CartStore interface \\{\\n\\tItems\\(.*\\n\\tSetItem\\(.*\\n\\tRemoveItem\\(.*\\n\\}"
+        }
+      ]
+    },
+    {
+      "id": "C5-2",
+      "kind": "repo",
+      "claim": "`repository.Carts` 沒有任何「實作 `CartStore`」的宣告，仍然滿足 `service.CartStore`。`cmd/api/main.go` 有一行編譯期檢查，整個專案編譯通過。",
+      "claim_en": "`repository.Carts` carries no declaration that it implements `CartStore`, yet it satisfies `service.CartStore`. `cmd/api/main.go` holds a compile-time assertion, and the project builds.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "_ service\\.CartStore\\s+= \\(\\*repository\\.Carts\\)\\(nil\\)"
+        },
+        { "type": "run", "cmd": ["go", "build", "./..."] }
+      ]
+    },
+    {
+      "id": "C5-3",
+      "kind": "repo",
+      "claim": "把 `repository.Carts` 的 `RemoveItem` 方法改名後，`go build ./cmd/api` 失敗，錯誤訊息是 `missing method RemoveItem`。",
+      "claim_en": "After renaming the `RemoveItem` method of `repository.Carts`, `go build ./cmd/api` fails with `missing method RemoveItem`.",
+      "checks": [
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/repository/cart.go",
+            "old": "func (c *Carts) RemoveItem(",
+            "new": "func (c *Carts) RemoveItemRenamed("
+          },
+          "cmd": ["go", "build", "./cmd/api"],
+          "exit": "nonzero",
+          "output_contains": "missing method RemoveItem"
+        }
+      ]
+    },
+    {
+      "id": "C5-4",
+      "kind": "repo",
+      "claim": "購物車存在 Redis 的 hash，key 是 `cart:` 加購物車 id。`SetItem` 用 pipeline 一次送出 `HSET` 與 `EXPIRE`，期限是 7 天。",
+      "claim_en": "A cart is a Redis hash under the key `cart:` plus the cart id. `SetItem` sends `HSET` and `EXPIRE` in one pipeline, and the expiry is 7 days.",
+      "checks": [
+        { "type": "contains", "file": "internal/repository/cart.go", "text": "const cartTTL = 7 * 24 * time.Hour" },
+        { "type": "contains", "file": "internal/repository/cart.go", "text": "return \"cart:\" + cartID" },
+        {
+          "type": "matches",
+          "file": "internal/repository/cart.go",
+          "pattern": "Pipelined\\(ctx, func\\(p goredis\\.Pipeliner\\) error \\{\\n\\t\\tp\\.HSet\\(.*\\n\\t\\tp\\.Expire\\(ctx, key, cartTTL\\)"
+        }
+      ]
+    },
+    {
+      "id": "C5-5",
+      "kind": "repo",
+      "claim": "session 從記憶體換到 Redis，`cmd/api/main.go` 改成呼叫 `session.NewRedis`。宣告 `SessionStore` 介面的 `internal/handler/middleware.go`，在 tag `ep04` 與 `ep05` 之間沒有任何改動。",
+      "claim_en": "Sessions moved from memory to Redis by calling `session.NewRedis` in `cmd/api/main.go`. `internal/handler/middleware.go`, which declares the `SessionStore` interface, is byte-for-byte the same at tags `ep04` and `ep05`.",
+      "checks": [
+        { "type": "contains", "file": "cmd/api/main.go", "text": "sessions := session.NewRedis(rdb, sessionTTL)" },
+        {
+          "type": "matches",
+          "file": "internal/handler/middleware.go",
+          "pattern": "type SessionStore interface \\{\\n\\tCreate\\(.*\\n\\tExists\\(.*\\n\\}"
+        },
+        { "type": "run", "cmd": ["git", "diff", "--quiet", "ep04", "ep05", "--", "internal/handler/middleware.go"] }
+      ]
+    },
+    {
+      "id": "C5-6",
+      "kind": "repo",
+      "claim": "兩台 API 各自把購物車存在行程記憶體時，同一個瀏覽器換到第二台，購物車是空的。測試 `TestCartIsLostWhenStateLivesInProcessMemory` 重現這個事故。",
+      "claim_en": "When two API instances each keep carts in process memory, the same browser finds an empty cart on the second instance. The test `TestCartIsLostWhenStateLivesInProcessMemory` replays the incident.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestCartIsLostWhenStateLivesInProcessMemory$", "-v", "./internal/handler"],
+          "output_contains": "--- PASS: TestCartIsLostWhenStateLivesInProcessMemory"
+        }
+      ]
+    },
+    {
+      "id": "C5-7",
+      "kind": "repo",
+      "claim": "兩台 API 共用同一個 Redis 時，在第一台放進購物車的商品，第二台看得到；另一個瀏覽器看不到這台購物車。測試 `TestCartSurvivesSwitchingMachinesWithRedis` 證明。",
+      "claim_en": "When two API instances share one Redis, items added on the first instance are visible on the second, and a different browser does not see that cart. The test `TestCartSurvivesSwitchingMachinesWithRedis` proves it.",
+      "checks": [
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestCartSurvivesSwitchingMachinesWithRedis$", "-v", "./internal/handler"],
+          "output_contains": "--- PASS: TestCartSurvivesSwitchingMachinesWithRedis"
+        }
+      ]
+    },
+    {
+      "id": "C5-8",
+      "kind": "repo",
+      "claim": "session 與購物車在 Redis 會過期；session 每次使用、購物車每次寫入，期限都會往後延。測試 `TestRedisExpiry` 證明。",
+      "claim_en": "Sessions and carts expire in Redis; each use of a session and each write to a cart pushes the expiry forward. The test `TestRedisExpiry` proves it.",
+      "checks": [
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestRedisExpiry$", "-v", "./internal/handler"],
+          "output_contains": "--- PASS: TestRedisExpiry"
+        }
+      ]
+    },
+    {
+      "id": "C5-9",
+      "kind": "repo",
+      "claim": "購物車邏輯的單元測試不需要 Redis，也不用 mock 框架：測試替身 `memCartStore` 是一個 map 加三個方法。",
+      "claim_en": "The cart logic's unit tests need neither Redis nor a mocking framework: the test double `memCartStore` is a map with three methods.",
+      "checks": [
+        { "type": "contains", "file": "internal/service/cart_test.go", "text": "type memCartStore struct {" },
+        { "type": "run", "cmd": ["go", "test", "-count=1", "-run", "^TestCartService", "./internal/service"] }
+      ]
+    },
+    {
+      "id": "C5-10",
+      "kind": "repo",
+      "claim": "tag `ep04` 的程式碼還沒有購物車，只有存在記憶體的 session。購物車是這一章新增的。",
+      "claim_en": "The code at tag `ep04` has no cart yet, only the in-memory session store. The cart is added in this chapter.",
+      "checks": [
+        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep04:internal/platform/session/memory.go"] },
+        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep04:internal/service/cart.go"], "exit": "nonzero" },
+        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep05:internal/service/cart.go"] }
+      ]
+    },
+    {
+      "id": "X5-1",
+      "kind": "reference",
+      "claim": "Go 的型別只要有介面列出的方法，就實作了那個介面，不需要另外宣告。C# 的類別要在宣告上寫 `: ICartRepository`，Java 的類別要寫 `implements CartRepository`。",
+      "claim_en": "A Go type implements an interface by having its methods, with no declaration. A C# class must name the interface in its declaration (`: ICartRepository`), and a Java class must write `implements CartRepository`.",
+      "sources": ["https://go.dev/ref/spec#Interface_types"]
+    }
+  ]
+}
