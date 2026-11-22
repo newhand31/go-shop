@@ -17,6 +17,6 @@
 ## 這份逐字稿引用的主張
 
 - **C5-1**　`CartStore` 介面宣告在使用它的 `service` 套件，只列三個方法：`Items`、`SetItem`、`RemoveItem`。
-- **C5-2**　`repository.Carts` 沒有任何「實作 `CartStore`」的宣告，仍然滿足 `service.CartStore`。`cmd/api/main.go` 有一行編譯期檢查，整個專案編譯通過。
+- **C5-2**　`repository` 套件沒有 import `service` 套件，`repository.Carts` 沒有任何「實作 `CartStore`」的宣告，仍然滿足 `service.CartStore`。`cmd/api/main.go` 有一行編譯期檢查，整個專案編譯通過。
 - **C5-6**　兩台 API 各自把購物車存在行程記憶體時，同一個瀏覽器換到第二台，購物車是空的。測試 `TestCartIsLostWhenStateLivesInProcessMemory` 重現這個事故。
 - **C5-7**　兩台 API 共用同一個 Redis 時，在第一台放進購物車的商品，第二台看得到；另一個瀏覽器看不到這台購物車。測試 `TestCartSurvivesSwitchingMachinesWithRedis` 證明。
