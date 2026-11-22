@@ -1,0 +1,555 @@
+{
+  "chapter": "ch12",
+  "title": "部署時進行中的結帳被切斷",
+  "tag": "ep12",
+  "claims": [
+    {
+      "id": "C12-1",
+      "kind": "repo",
+      "claim": "tag `ep11` 的 `cmd/api/main.go` 只監聽 `os.Interrupt`，不監聽 `SIGTERM`；收到取消之後直接 `return srv.Close()`。tag `ep12` 的 `cmd/api/main.go` 同時監聽 `os.Interrupt` 與 `syscall.SIGTERM`。",
+      "claim_en": "At tag `ep11`, `cmd/api/main.go` listens only for `os.Interrupt`, not `SIGTERM`, and on cancel it goes straight to `return srv.Close()`. At tag `ep12`, `cmd/api/main.go` listens for both `os.Interrupt` and `syscall.SIGTERM`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "signal.NotifyContext(context.Background(), os.Interrupt)",
+            "ep11",
+            "--",
+            "cmd/api/main.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "SIGTERM",
+            "ep11",
+            "--",
+            "cmd/api/main.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "return srv.Close()",
+            "ep11",
+            "--",
+            "cmd/api/main.go"
+          ]
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)"
+        }
+      ]
+    },
+    {
+      "id": "C12-2",
+      "kind": "repo",
+      "claim": "`lifecycle.Serve` 收到取消之後呼叫 `srv.Shutdown`，並且等 `Serve` 回傳才結束。測試 `TestServeLetsAnInFlightRequestFinishBeforeReturning` 證明：取消之後，進行中的請求照樣收到完整回應，`Serve` 回傳 `nil`。把 `srv.Shutdown` 換成 `srv.Close`，這個測試就失敗。",
+      "claim_en": "After cancel, `lifecycle.Serve` calls `srv.Shutdown` and waits for the serve goroutine to return. The test `TestServeLetsAnInFlightRequestFinishBeforeReturning` proves that a request already running still gets its full response and `Serve` returns `nil`. Replacing `srv.Shutdown` with `srv.Close` makes that test fail.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "text": "if err := srv.Shutdown(shutdownCtx); err != nil {"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestServeLetsAnInFlightRequestFinishBeforeReturning$",
+            "-v",
+            "./internal/platform/lifecycle"
+          ],
+          "output_contains": "--- PASS: TestServeLetsAnInFlightRequestFinishBeforeReturning"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/platform/lifecycle/lifecycle.go",
+            "old": "if err := srv.Shutdown(shutdownCtx); err != nil {",
+            "new": "if err := srv.Close(); err != nil || shutdownCtx == nil {"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestServeLetsAnInFlightRequestFinishBeforeReturning$",
+            "-v",
+            "./internal/platform/lifecycle"
+          ],
+          "exit": "nonzero",
+          "output_contains": "--- FAIL: TestServeLetsAnInFlightRequestFinishBeforeReturning"
+        }
+      ]
+    },
+    {
+      "id": "C12-3",
+      "kind": "repo",
+      "claim": "傳給 `Shutdown` 的 context 由 `context.WithoutCancel` 加一個逾時組成，不是已經被取消的訊號 context。測試 `TestServeRefusesNewConnectionsOnceShutdownStarts` 證明關機開始後新連線被拒絕；測試 `TestServeCutsConnectionsWhenGraceRunsOut` 證明寬限時間用完還沒做完，連線被切斷，錯誤包含 `context.DeadlineExceeded`。",
+      "claim_en": "The context passed to `Shutdown` is built from `context.WithoutCancel` plus a timeout, not from the already-cancelled signal context. The test `TestServeRefusesNewConnectionsOnceShutdownStarts` proves that new connections are refused once shutdown starts; the test `TestServeCutsConnectionsWhenGraceRunsOut` proves that when the grace period runs out the connection is cut and the error wraps `context.DeadlineExceeded`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "text": "context.WithTimeout(context.WithoutCancel(ctx), grace)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^(TestServeRefusesNewConnectionsOnceShutdownStarts|TestServeCutsConnectionsWhenGraceRunsOut)$",
+            "-v",
+            "./internal/platform/lifecycle"
+          ],
+          "output_contains": "--- PASS: TestServeRefusesNewConnectionsOnceShutdownStarts"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^(TestServeRefusesNewConnectionsOnceShutdownStarts|TestServeCutsConnectionsWhenGraceRunsOut)$",
+            "-v",
+            "./internal/platform/lifecycle"
+          ],
+          "output_contains": "--- PASS: TestServeCutsConnectionsWhenGraceRunsOut"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/lifecycle/lifecycle_test.go",
+          "text": "errors.Is(err, context.DeadlineExceeded)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "text": "ctx is already cancelled, so the drain needs its own clock, or Shutdown would give up on its first line."
+        }
+      ]
+    },
+    {
+      "id": "C12-4",
+      "kind": "repo",
+      "claim": "`Shutdown` 一開始，`srv.Serve` 就回傳 `http.ErrServerClosed`。`lifecycle.Serve` 先等 `Shutdown` 回來，才讀取並檢查這個錯誤。",
+      "claim_en": "As soon as `Shutdown` starts, `srv.Serve` returns `http.ErrServerClosed`. `lifecycle.Serve` waits for `Shutdown` to return first, and only then reads and checks that error.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "text": "// The trap this function exists for: the moment Shutdown starts, srv.Serve returns http.ErrServerClosed."
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "pattern": "srv\\.Shutdown\\(shutdownCtx\\); err != nil \\{[\\s\\S]*?\\n\\t\\}\\n\\tif err := <-serveErr; !errors\\.Is\\(err, http\\.ErrServerClosed\\) \\{"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "text": "\"finished\", it is \"started closing\"."
+        }
+      ]
+    },
+    {
+      "id": "C12-5",
+      "kind": "repo",
+      "claim": "`lifecycle.Group` 的 context 從 `context.Background()` 建立，不是從訊號 context 建立；`Stop` 取消這個 context，再等每一個 goroutine 回來。`cmd/api/main.go` 把寄信的 `dispatcher.Run`、清過期訂單的 `janitor.Run`、搶購的 `sale.Run` 交給同一個 `Group`；搶購只在設定 `FLASH_SALE_PRODUCT_ID` 時才啟動。tag `ep11` 的背景 goroutine 用 `context.WithCancel(ctx)`，是從訊號 context 長出來的。測試 `TestGroupStopWaitsForEveryGoroutine` 證明 `Stop` 會等。",
+      "claim_en": "The context of `lifecycle.Group` is built from `context.Background()`, not from the signal context; `Stop` cancels it and then waits for every goroutine to return. `cmd/api/main.go` hands the mail `dispatcher.Run`, the expiry `janitor.Run` and the flash-sale `sale.Run` to one `Group`; the flash sale starts only when `FLASH_SALE_PRODUCT_ID` is set. At tag `ep11` the background goroutines used `context.WithCancel(ctx)`, so they grew out of the signal context. The test `TestGroupStopWaitsForEveryGoroutine` proves that `Stop` waits.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "text": "ctx, cancel := context.WithCancel(context.Background())"
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/lifecycle/lifecycle.go",
+          "pattern": "func \\(g \\*Group\\) Stop\\(\\) \\{\\n\\tg\\.cancel\\(\\)\\n\\tg\\.wg\\.Wait\\(\\)\\n\\}"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "workers.Go(dispatcher.Run)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "workers.Go(janitor.Run)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "workers.Go(sale.Run)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "if flashProduct := envInt(\"FLASH_SALE_PRODUCT_ID\", 0); flashProduct > 0 {"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "workerCtx, stopWorker := context.WithCancel(ctx)",
+            "ep11",
+            "--",
+            "cmd/api/main.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestGroupStopWaitsForEveryGoroutine$",
+            "-v",
+            "./internal/platform/lifecycle"
+          ],
+          "output_contains": "--- PASS: TestGroupStopWaitsForEveryGoroutine"
+        }
+      ]
+    },
+    {
+      "id": "C12-6",
+      "kind": "repo",
+      "claim": "`serveThenStop` 只有兩個動作，順序是先 `lifecycle.Serve`，再 `workers.Stop`；`run` 呼叫的就是 `serveThenStop`。測試 `TestStopSignalLetsQueuedBuyersFinish`：一個 worker、客人 A 卡在資料庫、客人 B 在佇列，訊號來了之後兩位都收到 201。把這兩行對調，這個測試就失敗。",
+      "claim_en": "`serveThenStop` does two things, in this order: `lifecycle.Serve`, then `workers.Stop`; `run` calls exactly `serveThenStop`. The test `TestStopSignalLetsQueuedBuyersFinish`: one worker, buyer A stuck in the database, buyer B in the queue; after the stop signal both get 201. Swapping the two lines makes this test fail.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/shutdown.go",
+          "pattern": "\\{\\n\\terr := lifecycle\\.Serve\\(ctx, srv, ln, grace\\)\\n\\tworkers\\.Stop\\(\\)\\n\\treturn err\\n\\}"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "err = serveThenStop(ctx, srv, ln,"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestStopSignalLetsQueuedBuyersFinish$",
+            "-v",
+            "./cmd/api"
+          ],
+          "output_contains": "--- PASS: TestStopSignalLetsQueuedBuyersFinish"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "cmd/api/shutdown.go",
+            "old": "\terr := lifecycle.Serve(ctx, srv, ln, grace)\n\tworkers.Stop()\n",
+            "new": "\tworkers.Stop()\n\terr := lifecycle.Serve(ctx, srv, ln, grace)\n"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestStopSignalLetsQueuedBuyersFinish$",
+            "-v",
+            "./cmd/api"
+          ],
+          "exit": "nonzero",
+          "output_contains": "--- FAIL: TestStopSignalLetsQueuedBuyersFinish"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/shutdown.go",
+          "text": "Stop them first and that buyer is turned away mid-purchase."
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/shutdown_test.go",
+          "text": "B would be turned away with a 503"
+        }
+      ]
+    },
+    {
+      "id": "C12-7",
+      "kind": "repo",
+      "claim": "排空的預設上限是 25 秒，可用環境變數 `SHUTDOWN_GRACE_SECONDS` 改。`docker-compose.yml` 的 `api` 服務把 `stop_grace_period` 設成 40 秒。程式註解寫明：`docker stop` 預設等 10 秒，40 秒是 25 秒排空加最多 5 秒沖出 span。`main.go` 沖出 span 的逾時是 5 秒。",
+      "claim_en": "The default drain limit is 25 seconds and can be changed with the environment variable `SHUTDOWN_GRACE_SECONDS`. The `api` service in `docker-compose.yml` sets `stop_grace_period` to 40 seconds. Code comments say `docker stop` waits 10 seconds by default, and that 40 seconds is the 25-second drain plus up to 5 seconds to flush spans. The span flush timeout in `main.go` is 5 seconds.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "cmd/api/shutdown.go",
+          "text": "const defaultShutdownGrace = 25 * time.Second"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "envInt(\"SHUTDOWN_GRACE_SECONDS\", int(defaultShutdownGrace/time.Second))"
+        },
+        {
+          "type": "contains",
+          "file": "docker-compose.yml",
+          "text": "stop_grace_period: 40s"
+        },
+        {
+          "type": "contains",
+          "file": "docker-compose.yml",
+          "text": "25 s drain + up to 5 s span flush"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "context.WithTimeout(context.Background(), 5*time.Second)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/shutdown.go",
+          "text": "docker stop waits 10 s by default"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/shutdown.go",
+          "text": "sends SIGKILL in the middle of our graceful shutdown."
+        }
+      ]
+    },
+    {
+      "id": "C12-8",
+      "kind": "repo",
+      "claim": "`run` 裡的 `defer` 註冊順序是：先 flush span、再 `pool.Close`、再 `rdb.Close`、最後 `workers.Stop`。函式結束時 `defer` 反向執行，所以先停 worker，再關 Redis、關資料庫連線池，最後沖出 span。",
+      "claim_en": "In `run` the `defer` calls are registered in this order: flush spans, `pool.Close`, `rdb.Close`, `workers.Stop`. Defers run in reverse, so the workers stop first, then Redis closes, then the database pool closes, and the spans are flushed last.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "telemetry\\.Shutdown\\(flushCtx, tp\\)[\\s\\S]*?defer pool\\.Close\\(\\)[\\s\\S]*?defer rdb\\.Close\\(\\)[\\s\\S]*?defer workers\\.Stop\\(\\)"
+        }
+      ]
+    },
+    {
+      "id": "C12-9",
+      "kind": "repo",
+      "claim": "`Dockerfile` 有兩個階段：第一階段 `FROM golang:${GO_VERSION}-alpine AS build` 編譯，最後一階段是 `FROM scratch`，只複製憑證檔與 `/out/api` 兩樣東西。`go.mod` 與 `go.sum` 在 `COPY . .` 之前先複製並 `go mod download`。編譯指令有 `CGO_ENABLED=0`。`USER` 是 `65532:65532`，`ENTRYPOINT` 是陣列寫法 `[\"/api\"]`，而且沒有 `HEALTHCHECK` 指令。",
+      "claim_en": "The `Dockerfile` has two stages: the first, `FROM golang:${GO_VERSION}-alpine AS build`, compiles; the last is `FROM scratch` and copies only two things, the certificate file and `/out/api`. `go.mod` and `go.sum` are copied and `go mod download` runs before `COPY . .`. The build command sets `CGO_ENABLED=0`. `USER` is `65532:65532`, `ENTRYPOINT` is the array form `[\"/api\"]`, and there is no `HEALTHCHECK` instruction.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "FROM golang:${GO_VERSION}-alpine AS build"
+        },
+        {
+          "type": "matches",
+          "file": "Dockerfile",
+          "pattern": "COPY go\\.mod go\\.sum \\./\\nRUN go mod download\\n\\nCOPY \\. \\.\\n"
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "RUN CGO_ENABLED=0 go build -trimpath -ldflags=\"-s -w\" -o /out/api ./cmd/api"
+        },
+        {
+          "type": "matches",
+          "file": "Dockerfile",
+          "pattern": "\\nFROM scratch\\n(\\n|#[^\\n]*\\n)*COPY --from=build /etc/ssl/certs/ca-certificates\\.crt /etc/ssl/certs/ca-certificates\\.crt\\nCOPY --from=build /out/api /api\\n"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-c",
+            "-e",
+            "^COPY --from=build",
+            "ep12",
+            "--",
+            "Dockerfile"
+          ],
+          "output_contains": ":2"
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "\nUSER 65532:65532\n"
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "\nENTRYPOINT [\"/api\"]"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-i",
+            "-e",
+            "^HEALTHCHECK",
+            "ep12",
+            "--",
+            "Dockerfile"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "# go.mod and go.sum first: this layer is rebuilt only when dependencies change, not on every source edit."
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "which is the only kind that runs on scratch."
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "Exec form (a JSON array) makes /api PID 1, so docker stop's SIGTERM reaches the Go program directly."
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "# No HEALTHCHECK on purpose: scratch has no shell and no curl to run one with."
+        },
+        {
+          "type": "contains",
+          "file": "Dockerfile",
+          "text": "# scratch has no /etc/passwd, so the user is a bare number: not root, and nothing to look up."
+        }
+      ]
+    },
+    {
+      "id": "C12-10",
+      "kind": "repo",
+      "claim": "測試 `TestDockerfileKeepsTheShutdownPromises` 讀 `Dockerfile` 的文字，只守三件事：最後一階是 `FROM scratch`、`ENTRYPOINT` 是陣列寫法、編譯有 `CGO_ENABLED=0`。它不編譯 image，所以不證明 image 能啟動。三件事各改掉一件，這個測試都會失敗。",
+      "claim_en": "The test `TestDockerfileKeepsTheShutdownPromises` reads the text of the `Dockerfile` and guards three things only: the last stage is `FROM scratch`, `ENTRYPOINT` is the array form, and the build sets `CGO_ENABLED=0`. It does not build an image, so it does not prove the image starts. Breaking any one of the three makes the test fail.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestDockerfileKeepsTheShutdownPromises$",
+            "-v",
+            "./cmd/api"
+          ],
+          "output_contains": "--- PASS: TestDockerfileKeepsTheShutdownPromises"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/shutdown_test.go",
+          "text": "// TestDockerfileKeepsTheShutdownPromises reads the Dockerfile as text. It does not build an image;"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "Dockerfile",
+            "old": "ENTRYPOINT [\"/api\"]",
+            "new": "ENTRYPOINT /api"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestDockerfileKeepsTheShutdownPromises$",
+            "-v",
+            "./cmd/api"
+          ],
+          "exit": "nonzero",
+          "output_contains": "want the exec (JSON array) form"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "Dockerfile",
+            "old": "FROM scratch",
+            "new": "FROM alpine:3.20"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestDockerfileKeepsTheShutdownPromises$",
+            "-v",
+            "./cmd/api"
+          ],
+          "exit": "nonzero",
+          "output_contains": "want FROM scratch"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "Dockerfile",
+            "old": "RUN CGO_ENABLED=0 go build",
+            "new": "RUN go build"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestDockerfileKeepsTheShutdownPromises$",
+            "-v",
+            "./cmd/api"
+          ],
+          "exit": "nonzero",
+          "output_contains": "the build must set CGO_ENABLED=0"
+        }
+      ]
+    },
+    {
+      "id": "X12-1",
+      "kind": "reference",
+      "claim": "Go 的 `http.Server` 提供 `Shutdown`（優雅關閉）與 `Close`（立刻關閉）兩個方法，由程式自己決定順序。C# 的 .NET Generic Host 提供 `IHostApplicationLifetime`，用來處理優雅關機的工作。Spring Boot 預設啟用優雅關機，等待期限用 `spring.lifecycle.timeout-per-shutdown-phase` 設定。",
+      "claim_en": "Go's `http.Server` offers `Shutdown` (graceful) and `Close` (immediate), and the program decides the order. The C# .NET Generic Host provides `IHostApplicationLifetime` for graceful-shutdown work. Spring Boot enables graceful shutdown by default, and its wait is set with `spring.lifecycle.timeout-per-shutdown-phase`.",
+      "sources": [
+        "https://pkg.go.dev/net/http#Server.Shutdown",
+        "https://learn.microsoft.com/en-us/dotnet/core/extensions/generic-host",
+        "https://docs.spring.io/spring-boot/reference/web/graceful-shutdown.html"
+      ]
+    },
+    {
+      "id": "X12-2",
+      "kind": "reference",
+      "claim": "`docker stop` 先對容器的主行程送 SIGTERM，等過寬限時間之後再送 SIGKILL。",
+      "claim_en": "`docker stop` first sends SIGTERM to the container's main process and, after a grace period, sends SIGKILL.",
+      "sources": [
+        "https://docs.docker.com/reference/cli/docker/container/stop/"
+      ]
+    }
+  ]
+}
