@@ -207,6 +207,7 @@ func (c *checkout) path(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("make temp dir: %w", err)
 	}
 	if out, err := exec.CommandContext(ctx, "git", "-C", c.repo, "worktree", "add", "--detach", dir, c.tag).CombinedOutput(); err != nil {
+		_ = os.RemoveAll(dir)
 		return "", fmt.Errorf("check out %s: %w\n%s", c.tag, err, out)
 	}
 	c.dir = dir

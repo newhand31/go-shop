@@ -19,15 +19,36 @@
     {
       "id": "C5-2",
       "kind": "repo",
-      "claim": "`repository.Carts` 沒有任何「實作 `CartStore`」的宣告，仍然滿足 `service.CartStore`。`cmd/api/main.go` 有一行編譯期檢查，整個專案編譯通過。",
-      "claim_en": "`repository.Carts` carries no declaration that it implements `CartStore`, yet it satisfies `service.CartStore`. `cmd/api/main.go` holds a compile-time assertion, and the project builds.",
+      "claim": "`repository` 套件沒有 import `service` 套件，`repository.Carts` 沒有任何「實作 `CartStore`」的宣告，仍然滿足 `service.CartStore`。`cmd/api/main.go` 有一行編譯期檢查，整個專案編譯通過。",
+      "claim_en": "The `repository` package does not import the `service` package and `repository.Carts` carries no declaration that it implements `CartStore`, yet it satisfies `service.CartStore`. `cmd/api/main.go` holds a compile-time assertion, and the project builds.",
       "checks": [
         {
           "type": "matches",
           "file": "cmd/api/main.go",
           "pattern": "_ service\\.CartStore\\s+= \\(\\*repository\\.Carts\\)\\(nil\\)"
         },
-        { "type": "run", "cmd": ["go", "build", "./..."] }
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "internal/service",
+            "ep05",
+            "--",
+            "internal/repository"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "build",
+            "./..."
+          ]
+        }
       ]
     },
     {
@@ -43,7 +64,11 @@
             "old": "func (c *Carts) RemoveItem(",
             "new": "func (c *Carts) RemoveItemRenamed("
           },
-          "cmd": ["go", "build", "./cmd/api"],
+          "cmd": [
+            "go",
+            "build",
+            "./cmd/api"
+          ],
           "exit": "nonzero",
           "output_contains": "missing method RemoveItem"
         }
@@ -52,31 +77,92 @@
     {
       "id": "C5-4",
       "kind": "repo",
-      "claim": "購物車存在 Redis 的 hash，key 是 `cart:` 加購物車 id。`SetItem` 用 pipeline 一次送出 `HSET` 與 `EXPIRE`，期限是 7 天。",
-      "claim_en": "A cart is a Redis hash under the key `cart:` plus the cart id. `SetItem` sends `HSET` and `EXPIRE` in one pipeline, and the expiry is 7 days.",
+      "claim": "購物車存在 Redis 的 hash，key 是 `cart:` 加購物車 id，欄位是商品編號，值是數量。`SetItem` 用 pipeline 一次送出 `HSET` 與 `EXPIRE`，期限是 7 天。",
+      "claim_en": "A cart is a Redis hash under the key `cart:` plus the cart id; the field is the product id and the value is the quantity. `SetItem` sends `HSET` and `EXPIRE` in one pipeline, and the expiry is 7 days.",
       "checks": [
-        { "type": "contains", "file": "internal/repository/cart.go", "text": "const cartTTL = 7 * 24 * time.Hour" },
-        { "type": "contains", "file": "internal/repository/cart.go", "text": "return \"cart:\" + cartID" },
+        {
+          "type": "contains",
+          "file": "internal/repository/cart.go",
+          "text": "const cartTTL = 7 * 24 * time.Hour"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/cart.go",
+          "text": "return \"cart:\" + cartID"
+        },
         {
           "type": "matches",
           "file": "internal/repository/cart.go",
           "pattern": "Pipelined\\(ctx, func\\(p goredis\\.Pipeliner\\) error \\{\\n\\t\\tp\\.HSet\\(.*\\n\\t\\tp\\.Expire\\(ctx, key, cartTTL\\)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/cart.go",
+          "text": "p.HSet(ctx, key, strconv.Itoa(productID), quantity)"
         }
       ]
     },
     {
       "id": "C5-5",
       "kind": "repo",
-      "claim": "session 從記憶體換到 Redis，`cmd/api/main.go` 改成呼叫 `session.NewRedis`。宣告 `SessionStore` 介面的 `internal/handler/middleware.go`，在 tag `ep04` 與 `ep05` 之間沒有任何改動。",
-      "claim_en": "Sessions moved from memory to Redis by calling `session.NewRedis` in `cmd/api/main.go`. `internal/handler/middleware.go`, which declares the `SessionStore` interface, is byte-for-byte the same at tags `ep04` and `ep05`.",
+      "claim": "session 從記憶體換到 Redis：`cmd/api/main.go` 在 tag `ep04` 呼叫 `session.NewMemory`，在 tag `ep05` 呼叫 `session.NewRedis`。記憶體版與 Redis 版都有 `Create` 和 `Exists` 兩個方法。宣告 `SessionStore` 介面的 `internal/handler/middleware.go`，在 tag `ep04` 與 `ep05` 之間沒有任何改動。",
+      "claim_en": "Sessions moved from memory to Redis: `cmd/api/main.go` calls `session.NewMemory` at tag `ep04` and `session.NewRedis` at tag `ep05`. Both the memory and the Redis store have the two methods `Create` and `Exists`. `internal/handler/middleware.go`, which declares the `SessionStore` interface, is byte-for-byte the same at tags `ep04` and `ep05`.",
       "checks": [
-        { "type": "contains", "file": "cmd/api/main.go", "text": "sessions := session.NewRedis(rdb, sessionTTL)" },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "sessions := session.NewRedis(rdb, sessionTTL)"
+        },
         {
           "type": "matches",
           "file": "internal/handler/middleware.go",
           "pattern": "type SessionStore interface \\{\\n\\tCreate\\(.*\\n\\tExists\\(.*\\n\\}"
         },
-        { "type": "run", "cmd": ["git", "diff", "--quiet", "ep04", "ep05", "--", "internal/handler/middleware.go"] }
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "diff",
+            "--quiet",
+            "ep04",
+            "ep05",
+            "--",
+            "internal/handler/middleware.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "sessions := session.NewMemory(sessionTTL)",
+            "ep04",
+            "--",
+            "cmd/api/main.go"
+          ]
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/memory.go",
+          "text": "func (m *Memory) Create("
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/memory.go",
+          "text": "func (m *Memory) Exists("
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/redis.go",
+          "text": "func (r *Redis) Create("
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/redis.go",
+          "text": "func (r *Redis) Exists("
+        }
       ]
     },
     {
@@ -87,7 +173,16 @@
       "checks": [
         {
           "type": "run",
-          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestCartIsLostWhenStateLivesInProcessMemory$", "-v", "./internal/handler"],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestCartIsLostWhenStateLivesInProcessMemory$",
+            "-v",
+            "./internal/handler"
+          ],
           "output_contains": "--- PASS: TestCartIsLostWhenStateLivesInProcessMemory"
         }
       ]
@@ -100,8 +195,19 @@
       "checks": [
         {
           "type": "run",
-          "requires": ["docker"],
-          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestCartSurvivesSwitchingMachinesWithRedis$", "-v", "./internal/handler"],
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestCartSurvivesSwitchingMachinesWithRedis$",
+            "-v",
+            "./internal/handler"
+          ],
           "output_contains": "--- PASS: TestCartSurvivesSwitchingMachinesWithRedis"
         }
       ]
@@ -114,8 +220,19 @@
       "checks": [
         {
           "type": "run",
-          "requires": ["docker"],
-          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestRedisExpiry$", "-v", "./internal/handler"],
+          "requires": [
+            "docker"
+          ],
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestRedisExpiry$",
+            "-v",
+            "./internal/handler"
+          ],
           "output_contains": "--- PASS: TestRedisExpiry"
         }
       ]
@@ -123,11 +240,60 @@
     {
       "id": "C5-9",
       "kind": "repo",
-      "claim": "購物車邏輯的單元測試不需要 Redis，也不用 mock 框架：測試替身 `memCartStore` 是一個 map 加三個方法。",
-      "claim_en": "The cart logic's unit tests need neither Redis nor a mocking framework: the test double `memCartStore` is a map with three methods.",
+      "claim": "購物車邏輯的單元測試不需要 Redis，`go.mod` 裡也沒有 mock 框架：測試替身 `memCartStore` 是一個 map 加三個方法。",
+      "claim_en": "The cart logic's unit tests need no Redis, and `go.mod` lists no mocking framework: the test double `memCartStore` is a map with three methods.",
       "checks": [
-        { "type": "contains", "file": "internal/service/cart_test.go", "text": "type memCartStore struct {" },
-        { "type": "run", "cmd": ["go", "test", "-count=1", "-run", "^TestCartService", "./internal/service"] }
+        {
+          "type": "contains",
+          "file": "internal/service/cart_test.go",
+          "text": "type memCartStore struct {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/cart_test.go",
+          "text": "carts map[string]map[int]int"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/cart_test.go",
+          "text": "func (m *memCartStore) Items("
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/cart_test.go",
+          "text": "func (m *memCartStore) SetItem("
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/cart_test.go",
+          "text": "func (m *memCartStore) RemoveItem("
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-i",
+            "-e",
+            "mock",
+            "ep05",
+            "--",
+            "go.mod"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestCartService",
+            "./internal/service"
+          ]
+        }
       ]
     },
     {
@@ -136,9 +302,52 @@
       "claim": "tag `ep04` 的程式碼還沒有購物車，只有存在記憶體的 session。購物車是這一章新增的。",
       "claim_en": "The code at tag `ep04` has no cart yet, only the in-memory session store. The cart is added in this chapter.",
       "checks": [
-        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep04:internal/platform/session/memory.go"] },
-        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep04:internal/service/cart.go"], "exit": "nonzero" },
-        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep05:internal/service/cart.go"] }
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep04:internal/platform/session/memory.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep04:internal/service/cart.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep05:internal/service/cart.go"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C5-11",
+      "kind": "repo",
+      "claim": "Redis 版的 session：`Create` 用 `SET` 建立 session，`Exists` 用 `EXPIRE` 檢查並延長期限。",
+      "claim_en": "The Redis session store: `Create` makes a session with `SET`, and `Exists` checks and extends it with `EXPIRE`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/session/redis.go",
+          "text": "r.rdb.Set(ctx, sessionKey(id), \"1\", r.ttl)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/redis.go",
+          "text": "r.rdb.Expire(ctx, sessionKey(id), r.ttl)"
+        }
       ]
     },
     {
@@ -146,7 +355,9 @@
       "kind": "reference",
       "claim": "Go 的型別只要有介面列出的方法，就實作了那個介面，不需要另外宣告。C# 的類別要在宣告上寫 `: ICartRepository`，Java 的類別要寫 `implements CartRepository`。",
       "claim_en": "A Go type implements an interface by having its methods, with no declaration. A C# class must name the interface in its declaration (`: ICartRepository`), and a Java class must write `implements CartRepository`.",
-      "sources": ["https://go.dev/ref/spec#Interface_types"]
+      "sources": [
+        "https://go.dev/ref/spec#Interface_types"
+      ]
     }
   ]
 }
