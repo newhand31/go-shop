@@ -83,6 +83,37 @@
             "internal/handler/handler.go"
           ],
           "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-c",
+            "-E",
+            "[.](Get|Post|Put|Patch|Delete|Head|Options|Handle|HandleFunc|Route|Mount|Method|Connect|Trace)[(]./",
+            "ep02",
+            "--",
+            "cmd",
+            "internal"
+          ],
+          "output_contains": "internal/handler/handler.go:2"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-l",
+            "-E",
+            "[.](Get|Post|Put|Patch|Delete|Head|Options|Handle|HandleFunc|Route|Mount|Method|Connect|Trace)[(]./",
+            "ep02",
+            "--",
+            "cmd",
+            "internal",
+            ":(exclude)internal/handler/handler.go"
+          ],
+          "exit": "nonzero"
         }
       ]
     },
@@ -291,8 +322,8 @@
     {
       "id": "C3-7",
       "kind": "repo",
-      "claim": "`internal/handler/errors.go` 的 `writeError` 是錯誤回應的出口。它用 `errors.Is` 檢查 `ErrProductNotFound`，回 404 與 `product_not_found`；用 `errors.As` 取出 `*service.ValidationError` 與生成程式碼的三種參數錯誤，回 400 與 `invalid_request`，並把欄位名稱放進 `field`。把 `errors.Is` 換成 `==` 比較後，`TestErrorResponsesShareOneShape` 失敗，訊息是 `status = 500, want 404`。",
-      "claim_en": "`writeError` in `internal/handler/errors.go` is the exit for error responses. It uses `errors.Is` to check for `ErrProductNotFound` and answers 404 with `product_not_found`; it uses `errors.As` to pull out `*service.ValidationError` and the generated code's three parameter errors and answers 400 with `invalid_request`, putting the field name into `field`. Replace `errors.Is` with an `==` comparison and `TestErrorResponsesShareOneShape` fails with `status = 500, want 404`.",
+      "claim": "`internal/handler/errors.go` 的 `writeError` 是 handler 錯誤與生成程式碼參數錯誤的出口；路由器的 404 與 405 不走這裡，由 `notFound` 與 `methodNotAllowed` 直接呼叫 `writeJSON`。它用 `errors.Is` 檢查 `ErrProductNotFound`，回 404 與 `product_not_found`；用 `errors.As` 取出 `*service.ValidationError` 與生成程式碼的三種參數錯誤，回 400 與 `invalid_request`，並把欄位名稱放進 `field`。測試 `TestErrorResponsesShareOneShape` 的 `id` 不是數字與 `id` 不是正數兩列，檢查狀態碼 400、`code` 是 `invalid_request`、`field` 是 `id`。把 `errors.Is` 換成 `==` 比較後，`TestErrorResponsesShareOneShape` 失敗，訊息是 `status = 500, want 404`。",
+      "claim_en": "`writeError` in `internal/handler/errors.go` is the exit for handler errors and the generated code's parameter errors; the router's 404 and 405 do not go through it, and `notFound` and `methodNotAllowed` call `writeJSON` directly. It uses `errors.Is` to check for `ErrProductNotFound` and answers 404 with `product_not_found`; it uses `errors.As` to pull out `*service.ValidationError` and the generated code's three parameter errors and answers 400 with `invalid_request`, putting the field name into `field`. In `TestErrorResponsesShareOneShape`, the rows for a non-numeric id and a non-positive id check status 400, `code` `invalid_request` and `field` `id`. Replace `errors.Is` with an `==` comparison and `TestErrorResponsesShareOneShape` fails with `status = 500, want 404`.",
       "checks": [
         {
           "type": "contains",
@@ -330,6 +361,46 @@
           "text": "status, body = http.StatusBadRequest, api.Error{Code: \"invalid_request\", Message: validation.Message, Field: &validation.Field}"
         },
         {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "status, body = http.StatusBadRequest, api.Error{Code: \"invalid_request\", Message: \"invalid format\", Field: &badParam.ParamName}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "status, body = http.StatusBadRequest, api.Error{Code: \"invalid_request\", Message: \"is required\", Field: &missing.ParamName}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "status, body = http.StatusBadRequest, api.Error{Code: \"invalid_request\", Message: \"must be given once\", Field: &tooMany.ParamName}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"id is not a number (generated binder)\", http.MethodGet, \"/products/abc\", fakeProducts{}, http.StatusBadRequest, \"invalid_request\", \"id\"},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"id is not positive (service validation)\", http.MethodGet, \"/products/0\", fakeProducts{err: &service.ValidationError{Field: \"id\", Message: \"must be a positive integer\"}}, http.StatusBadRequest, \"invalid_request\", \"id\"},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "if gotField != tt.wantField {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "if got.Code != tt.wantCode {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "if rec.Code != tt.wantStatus {"
+        },
+        {
           "type": "run",
           "edit": {
             "file": "internal/handler/errors.go",
@@ -346,6 +417,32 @@
           ],
           "exit": "nonzero",
           "output_contains": "status = 500, want 404"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-v",
+            "-run",
+            "^TestErrorResponsesShareOneShape$",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestErrorResponsesShareOneShape/id_is_not_a_number_(generated_binder)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-v",
+            "-run",
+            "^TestErrorResponsesShareOneShape$",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestErrorResponsesShareOneShape/id_is_not_positive_(service_validation)"
         }
       ]
     },
@@ -388,8 +485,8 @@
     {
       "id": "C3-9",
       "kind": "repo",
-      "claim": "tag `ep03` 的 `internal/handler` 套件沒有任何 `http.Error` 呼叫。`ListProducts` 與 `GetProduct` 出錯時都呼叫 `writeError`。路由器的 404 與 405 換成 `notFound` 與 `methodNotAllowed`，兩者回傳 `api.Error`。生成程式碼的 `ErrorHandlerFunc` 也呼叫 `writeError`。",
-      "claim_en": "The `internal/handler` package at tag `ep03` has no `http.Error` call. `ListProducts` and `GetProduct` call `writeError` on failure. The router's 404 and 405 are replaced by `notFound` and `methodNotAllowed`, which return `api.Error`. The generated code's `ErrorHandlerFunc` also calls `writeError`.",
+      "claim": "tag `ep03` 的 `internal/handler` 套件沒有任何 `http.Error` 呼叫。`ListProducts` 與 `GetProduct` 出錯時都呼叫 `writeError`。路由器的 404 與 405 換成 `notFound` 與 `methodNotAllowed`，兩者回傳 `http.HandlerFunc`，寫出的 body 是 `api.Error` 的 JSON，並直接呼叫 `writeJSON`。生成程式碼的 `ErrorHandlerFunc` 也呼叫 `writeError`。",
+      "claim_en": "The `internal/handler` package at tag `ep03` has no `http.Error` call. `ListProducts` and `GetProduct` call `writeError` on failure. The router's 404 and 405 are replaced by `notFound` and `methodNotAllowed`, which return an `http.HandlerFunc`; the body it writes is the JSON of `api.Error`, and it calls `writeJSON` directly. The generated code's `ErrorHandlerFunc` also calls `writeError`.",
       "checks": [
         {
           "type": "run",
@@ -439,14 +536,24 @@
           "type": "contains",
           "file": "internal/handler/errors.go",
           "text": "writeJSON(w, logger, http.StatusMethodNotAllowed, api.Error{Code: \"method_not_allowed\", Message: \"method not allowed\"})"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "func notFound(logger *slog.Logger) http.HandlerFunc {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "func methodNotAllowed(logger *slog.Logger) http.HandlerFunc {"
         }
       ]
     },
     {
       "id": "C3-10",
       "kind": "repo",
-      "claim": "測試 `TestErrorResponsesShareOneShape` 有 8 列，每列是一種出錯情況：商品不存在、包了兩層的商品不存在、id 不是數字、id 不是正數、列表出錯、單筆出錯、路由不存在、方法不對。每一列都檢查 `Content-Type` 是 JSON、body 能解成沒有多餘欄位的 `api.Error`、`code` 符合預期、`message` 不是空的也不含 `postgres`。這個測試通過。",
-      "claim_en": "The test `TestErrorResponsesShareOneShape` has 8 rows, one per failure: unknown product, a not-found wrapped twice, an id that is not a number, an id that is not positive, a failing list, a failing get, an unknown route and a wrong method. Every row checks that `Content-Type` is JSON, that the body decodes into `api.Error` with no extra fields, that `code` is as expected, and that `message` is not empty and does not contain `postgres`. The test passes.",
+      "claim": "測試 `TestErrorResponsesShareOneShape` 有 8 列，每列是一種出錯情況：商品不存在、包了兩層的商品不存在、id 不是數字、id 不是正數、列表出錯、單筆出錯、路由不存在、方法不對。每一列都檢查 `Content-Type` 是 JSON、body 能解成沒有多餘欄位的 `api.Error`、`code` 符合預期、`field` 符合預期，`message` 不是空的也不含 `postgres`；方法不對那一列另外檢查 `Allow` 標頭是 `GET`。這個測試通過。",
+      "claim_en": "The test `TestErrorResponsesShareOneShape` has 8 rows, one per failure: unknown product, a not-found wrapped twice, an id that is not a number, an id that is not positive, a failing list, a failing get, an unknown route and a wrong method. Every row checks that `Content-Type` is JSON, that the body decodes into `api.Error` with no extra fields, that `code` is as expected, that `field` is as expected, and that `message` is not empty and does not contain `postgres`; the wrong-method row also checks that the `Allow` header is `GET`. The test passes.",
       "checks": [
         {
           "type": "matches",
@@ -477,6 +584,16 @@
           "type": "contains",
           "file": "internal/handler/handler_test.go",
           "text": "strings.Contains(got.Message, \"postgres\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "if gotField != tt.wantField {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "rec.Header().Get(\"Allow\") != \"GET\""
         },
         {
           "type": "run",

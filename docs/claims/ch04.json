@@ -48,8 +48,8 @@
     {
       "id": "C4-2",
       "kind": "repo",
-      "claim": "tag `ep03` 的程式碼沒有限流，也沒有 session：`internal/handler/middleware.go`、`internal/platform/ratelimit/ratelimit.go`、`internal/platform/session/memory.go` 都不存在。這三個檔案是這一章新增的。",
-      "claim_en": "The code at tag `ep03` has no rate limiting and no session: `internal/handler/middleware.go`, `internal/platform/ratelimit/ratelimit.go` and `internal/platform/session/memory.go` do not exist. This chapter adds all three files.",
+      "claim": "tag `ep03` 的程式碼沒有限流，也沒有 session：`internal/handler/middleware.go`、`internal/platform/ratelimit/ratelimit.go`、`internal/platform/session/memory.go` 都不存在。這三個原始碼檔是這一章新增的。",
+      "claim_en": "The code at tag `ep03` has no rate limiting and no session: `internal/handler/middleware.go`, `internal/platform/ratelimit/ratelimit.go` and `internal/platform/session/memory.go` do not exist. This chapter adds all three source files.",
       "checks": [
         {
           "type": "run",
@@ -203,13 +203,23 @@
     {
       "id": "C4-5",
       "kind": "repo",
-      "claim": "限流用連線的 `RemoteAddr` 當 key，程式碼沒有讀 `X-Forwarded-For` 標頭。測試 `TestRateLimit` 的案例 `x-forwarded-for is ignored` 送出不同的 `X-Forwarded-For`，限流器收到的 key 仍然是連線位址。",
-      "claim_en": "The limiter keys on the connection's `RemoteAddr`, and no code reads the `X-Forwarded-For` header. The `TestRateLimit` case `x-forwarded-for is ignored` sends a different `X-Forwarded-For` and the limiter still receives the connection address as its key.",
+      "claim": "限流的 key 是 `RemoteAddr` 用 `net.SplitHostPort` 取出的主機位址，不含埠號；程式碼沒有讀 `X-Forwarded-For` 標頭。測試 `TestRateLimit` 的案例 `allowed` 與 `ipv6 remote address` 檢查 key 不含埠號，案例 `x-forwarded-for is ignored` 送出不同的 `X-Forwarded-For`，限流器收到的 key 仍然是 `RemoteAddr` 的主機位址。",
+      "claim_en": "The limiter's key is the host part of `RemoteAddr`, taken with `net.SplitHostPort`, without the port; no code reads the `X-Forwarded-For` header. The `TestRateLimit` cases `allowed` and `ipv6 remote address` check that the key has no port, and the case `x-forwarded-for is ignored` sends a different `X-Forwarded-For` and the limiter still receives the host part of `RemoteAddr` as its key.",
       "checks": [
         {
           "type": "contains",
           "file": "internal/handler/middleware.go",
+          "text": "ok, retryAfter := limiter.Allow(clientIP(r))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
           "text": "host, _, err := net.SplitHostPort(r.RemoteAddr)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "return host"
         },
         {
           "type": "run",
@@ -217,13 +227,15 @@
             "git",
             "grep",
             "-q",
+            "-i",
             "-F",
             "-e",
-            "Header.Get(\"X-Forwarded-For\")",
+            "\"x-forwarded-for\"",
             "ep04",
             "--",
             "cmd",
-            "internal"
+            "internal",
+            ":(exclude)*_test.go"
           ],
           "exit": "nonzero"
         },
@@ -231,6 +243,21 @@
           "type": "contains",
           "file": "internal/handler/middleware_test.go",
           "text": "req.Header.Set(\"X-Forwarded-For\", tt.forwardedFor)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_test.go",
+          "text": "{\"allowed\", &fakeLimiter{ok: true}, \"203.0.113.7:51000\", \"\", http.StatusOK, \"\", \"203.0.113.7\"},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_test.go",
+          "text": "{\"ipv6 remote address\", &fakeLimiter{ok: true}, \"[2001:db8::1]:51000\", \"\", http.StatusOK, \"\", \"2001:db8::1\"},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_test.go",
+          "text": "if tt.limiter.gotKey != tt.wantKey {"
         },
         {
           "type": "run",
@@ -244,6 +271,32 @@
             "./internal/handler"
           ],
           "output_contains": "--- PASS: TestRateLimit/x-forwarded-for_is_ignored"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestRateLimit$/^allowed$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestRateLimit/allowed"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestRateLimit$/^ipv6_remote_address$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestRateLimit/ipv6_remote_address"
         }
       ]
     },
@@ -372,8 +425,8 @@
     {
       "id": "C4-8",
       "kind": "repo",
-      "claim": "`sweep` 會刪掉閒置到桶子已經補滿的 key，沒有這一步，map 裡的桶子只增不減。時鐘是注入的：`Limiter` 有一個 `now` 函式欄位，測試用 `fakeClock` 手動往前撥，測試程式裡沒有 `time.Sleep`。測試 `TestSweepDropsIdleKeys` 證明閒置的 key 被刪掉。",
-      "claim_en": "`sweep` deletes keys idle long enough for their bucket to be full again; without it the map of buckets only grows. The clock is injected: `Limiter` has a `now` function field, tests move a `fakeClock` forward by hand, and the test code contains no `time.Sleep`. The test `TestSweepDropsIdleKeys` proves idle keys are deleted.",
+      "claim": "`sweep` 會刪掉閒置到桶子已經補滿的 key，沒有這一步，map 裡的桶子只增不減。時鐘是注入的：`Limiter` 有一個 `now` 函式欄位，測試用 `fakeClock` 手動往前撥，這個 tag 所有 `_test.go` 檔裡都沒有 `time.Sleep`。測試 `TestSweepDropsIdleKeys` 證明閒置的 key 被刪掉。",
+      "claim_en": "`sweep` deletes keys idle long enough for their bucket to be full again; without it the map of buckets only grows. The clock is injected: `Limiter` has a `now` function field, tests move a `fakeClock` forward by hand, and no `_test.go` file at this tag contains `time.Sleep`. The test `TestSweepDropsIdleKeys` proves idle keys are deleted.",
       "checks": [
         {
           "type": "contains",
@@ -411,7 +464,7 @@
             "time.Sleep",
             "ep04",
             "--",
-            "internal/platform/ratelimit/ratelimit_test.go"
+            "*_test.go"
           ],
           "exit": "nonzero"
         },

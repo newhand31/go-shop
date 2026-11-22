@@ -291,13 +291,18 @@
     {
       "id": "C2-9",
       "kind": "repo",
-      "claim": "`main` 只呼叫 `run`，`run` 回傳 `error`，`main` 在 `run` 回傳之後才呼叫 `os.Exit(1)`。`cmd/api/main.go` 裡只有這 1 處 `os.Exit(1)`。連線池用 `defer pool.Close()` 關閉，所以 `run` 正常回傳時，`pool.Close()` 會執行。",
-      "claim_en": "`main` only calls `run`, `run` returns an `error`, and `main` calls `os.Exit(1)` only after `run` has returned. There is exactly 1 `os.Exit(1)` in `cmd/api/main.go`. The pool is closed with `defer pool.Close()`, so it runs when `run` returns normally.",
+      "claim": "`main` 先建立 `logger`，再呼叫 `run`；`run` 回傳 `error`；`run` 回傳錯誤之後，`main` 才記錄錯誤並呼叫 `os.Exit(1)`。`cmd/api/main.go` 裡只有這 1 處 `os.Exit(1)`。連線池用 `defer pool.Close()` 關閉，所以 `run` 正常回傳時，`pool.Close()` 會執行。",
+      "claim_en": "`main` creates a `logger` and then calls `run`; `run` returns an `error`; only after `run` has returned an error does `main` log it and call `os.Exit(1)`. There is exactly 1 `os.Exit(1)` in `cmd/api/main.go`. The pool is closed with `defer pool.Close()`, so it runs when `run` returns normally.",
       "checks": [
         {
           "type": "matches",
           "file": "cmd/api/main.go",
           "pattern": "if err := run\\(logger\\); err != nil \\{\\n\\t\\tlogger.Error\\(\"api stopped\", \"err\", err\\)\\n\\t\\tos.Exit\\(1\\)\\n\\t\\}"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))"
         },
         {
           "type": "contains",
@@ -380,8 +385,8 @@
     {
       "id": "C2-12",
       "kind": "repo",
-      "claim": "測試 `TestProducts_SurviveReconnect` 證明商品存在資料庫裡：用第一個連線池跑 migration 並新增 1 件商品，關閉第一個連線池，再開第二個連線池並再跑一次 migration。第二個連線池查到 4 件商品，第 4 件是新增的 `USB-C hub`。資料庫容器全程沒有關。",
-      "claim_en": "The test `TestProducts_SurviveReconnect` proves the products live in the database: it runs the migrations and inserts 1 product through the first pool, closes the first pool, opens a second pool and runs the migrations again. The second pool reads 4 products, and the 4th is the inserted `USB-C hub`. The database container stays up throughout.",
+      "claim": "測試 `TestProducts_SurviveReconnect` 證明商品存在資料庫裡：用第一個連線池跑 migration 並新增 1 件商品，關閉第一個連線池，再開第二個連線池並再跑一次 migration。第二個連線池查到 4 件商品，第 4 件是新增的 `USB-C hub`。",
+      "claim_en": "The test `TestProducts_SurviveReconnect` proves the products live in the database: it runs the migrations and inserts 1 product through the first pool, closes the first pool, opens a second pool and runs the migrations again. The second pool reads 4 products, and the 4th is the inserted `USB-C hub`.",
       "checks": [
         {
           "type": "contains",

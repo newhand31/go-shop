@@ -397,8 +397,8 @@
     {
       "id": "C10-9",
       "kind": "repo",
-      "claim": "`cmd/api/main.go` 的同一個 `workerCtx` 管三個 goroutine：寄信 worker、清理過期工作的 janitor、搶購 worker。同一個 `defer` 先取消，再等三個都結束，才輪到 `pool.Close`。整個專案編譯通過。",
-      "claim_en": "In `cmd/api/main.go` one `workerCtx` manages three goroutines: the outbox worker, the expiry janitor and the flash sale workers. One `defer` cancels it and waits for all three to finish, before `pool.Close` runs. The project builds.",
+      "claim": "`cmd/api/main.go` 的同一個 `workerCtx` 管三個 goroutine：寄信 worker、清理過期工作的 janitor、搶購 worker。`defer pool.Close()` 寫在前面，同一個 `defer` 寫在它後面：先取消，再等三個都結束，所以 `pool.Close` 排在最後。整個專案編譯通過。",
+      "claim_en": "In `cmd/api/main.go` one `workerCtx` manages three goroutines: the outbox worker, the expiry janitor and the flash sale workers. `defer pool.Close()` is written first and the one `defer` after it: it cancels and waits for all three to finish, so `pool.Close` runs last. The project builds.",
       "checks": [
         {
           "type": "matches",
@@ -432,6 +432,11 @@
             "build",
             "./..."
           ]
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "(?s)defer pool\\.Close\\(\\).*defer func\\(\\) \\{\\n\\t\\tstopWorker\\(\\)"
         }
       ]
     },
@@ -552,6 +557,70 @@
             "./internal/service"
           ],
           "output_contains": "--- PASS: TestFlashSale_Integration_FullQueueRejectsAndKeepsTheCounterHonest"
+        }
+      ]
+    },
+    {
+      "id": "C10-13",
+      "kind": "repo",
+      "claim": "tag `ep09` 的 `Checkout` 直接呼叫 `s.store.Place` 寫入資料庫，沒有預扣，也沒有排隊：整個 `*.go` 裡沒有 `Reserve`，`internal/service/order.go` 裡沒有 `chan`。這一章才加上預扣與排隊。",
+      "claim_en": "At tag `ep09`, `Checkout` calls `s.store.Place` on the database directly, with no reservation and no queue: no `*.go` file contains `Reserve`, and `internal/service/order.go` has no `chan`. This chapter adds the reservation and the queue.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "func (s *OrderService) Checkout(",
+            "ep09",
+            "--",
+            "internal/service/order.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "placed, err := s.store.Place(ctx, lines)",
+            "ep09",
+            "--",
+            "internal/service/order.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "Reserve",
+            "ep09",
+            "--",
+            "*.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "chan ",
+            "ep09",
+            "--",
+            "internal/service/order.go"
+          ],
+          "exit": "nonzero"
         }
       ]
     },
