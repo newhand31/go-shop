@@ -1,0 +1,670 @@
+{
+  "chapter": "ch04",
+  "title": "有人亂打 API",
+  "tag": "ep04",
+  "claims": [
+    {
+      "id": "C4-1",
+      "kind": "repo",
+      "claim": "同一個 IP 對 `/products` 連續送 1000 個請求：限流器的桶子容量是 10、每秒補 5 個。通過的請求數不超過「容量加這段時間補的數量」，至少有容量那麼多，其餘回 429，而且每個 429 都帶 `Retry-After`。測試 `TestFloodFromOneIPIsMostlyRejected` 起真的 HTTP server，走真的 TCP 驗證。",
+      "claim_en": "One IP sends 1000 requests to `/products`; the limiter's bucket holds 10 tokens and refills 5 per second. The passed requests never exceed capacity plus what refilled meanwhile, are at least the capacity, and the rest get 429, each with `Retry-After`. The test `TestFloodFromOneIPIsMostlyRejected` starts a real HTTP server over real TCP.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "const burst, rate, total = 10, 5.0, 1000"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "maxOK := burst + int(rate*elapsed.Seconds()) + 1"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "t.Fatal(\"429 without Retry-After\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "srv := httptest.NewServer(h)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestFloodFromOneIPIsMostlyRejected$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestFloodFromOneIPIsMostlyRejected"
+        }
+      ]
+    },
+    {
+      "id": "C4-2",
+      "kind": "repo",
+      "claim": "tag `ep03` 的程式碼沒有限流，也沒有 session：`internal/handler/middleware.go`、`internal/platform/ratelimit/ratelimit.go`、`internal/platform/session/memory.go` 都不存在。這三個檔案是這一章新增的。",
+      "claim_en": "The code at tag `ep03` has no rate limiting and no session: `internal/handler/middleware.go`, `internal/platform/ratelimit/ratelimit.go` and `internal/platform/session/memory.go` do not exist. This chapter adds all three files.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep03:internal/handler/middleware.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep03:internal/platform/ratelimit/ratelimit.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep03:internal/platform/session/memory.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep04:internal/handler/middleware.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep04:internal/platform/ratelimit/ratelimit.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep04:internal/platform/session/memory.go"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C4-3",
+      "kind": "repo",
+      "claim": "`Recover`、`RateLimit`、`Session` 三個 middleware 的型別都是 `func(http.Handler) http.Handler`：收一個 handler，回傳一個 handler。`handler.New` 用 chi 的 `r.Use` 串起來，順序是 `RequestLog`、`Recover`，然後是呼叫端傳入的 middleware。測試 `TestChainOrder` 證明請求依序進去、回應依相反順序出來：`first in, second in, second out, first out`。",
+      "claim_en": "`Recover`, `RateLimit` and `Session` each return `func(http.Handler) http.Handler`: they take a handler and return a handler. `handler.New` chains them with chi's `r.Use` in this order: `RequestLog`, `Recover`, then the middleware the caller passes. The test `TestChainOrder` proves requests go in order and responses come out in reverse: `first in, second in, second out, first out`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/handler/middleware.go",
+          "pattern": "func Recover\\(logger \\*slog\\.Logger\\) func\\(http\\.Handler\\) http\\.Handler \\{"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/middleware.go",
+          "pattern": "func RateLimit\\(limiter Limiter, logger \\*slog\\.Logger\\) func\\(http\\.Handler\\) http\\.Handler \\{"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/middleware.go",
+          "pattern": "func Session\\(store SessionStore, ttl time\\.Duration, logger \\*slog\\.Logger\\) func\\(http\\.Handler\\) http\\.Handler \\{"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/handler.go",
+          "pattern": "r\\.Use\\(RequestLog\\(logger\\), Recover\\(logger\\)\\)\\n\\tr\\.Use\\(middleware\\.\\.\\.\\)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_test.go",
+          "text": "want := \"first in,second in,second out,first out\""
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestChainOrder$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestChainOrder"
+        }
+      ]
+    },
+    {
+      "id": "C4-4",
+      "kind": "repo",
+      "claim": "`RateLimit` 在限流器回報用完額度時，回 429 與 `api.Error`（code 是 `rate_limited`），加上 `Retry-After` 標頭，然後 `return`，不呼叫 `next`。`Retry-After` 的秒數無條件進位，最少是 1 秒。測試 `TestRateLimit` 的案例 `blocked`（0.3 秒進位成 1）與 `retry-after rounds up`（2.1 秒進位成 3）都通過。",
+      "claim_en": "When the limiter reports the quota used up, `RateLimit` replies 429 with an `api.Error` (code `rate_limited`) and a `Retry-After` header, then returns without calling `next`. The `Retry-After` seconds round up and are at least 1. The `TestRateLimit` cases `blocked` (0.3 s rounds up to 1) and `retry-after rounds up` (2.1 s rounds up to 3) pass.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/handler/middleware.go",
+          "pattern": "if !ok \\{\\n\\t\\t\\t\\tsecs := int\\(math\\.Ceil\\(retryAfter\\.Seconds\\(\\)\\)\\)\\n\\t\\t\\t\\tw\\.Header\\(\\)\\.Set\\(\"Retry-After\", strconv\\.Itoa\\(max\\(secs, 1\\)\\)\\)\\n\\t\\t\\t\\twriteJSON\\(w, logger, http\\.StatusTooManyRequests, api\\.Error\\{Code: \"rate_limited\", Message: \"too many requests\"\\}\\)\\n\\t\\t\\t\\treturn"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/middleware.go",
+          "pattern": "return // not calling next is how a middleware says \"stop here\"\\n\\t\\t\\t\\}\\n\\t\\t\\tnext\\.ServeHTTP\\(w, r\\)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestRateLimit$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestRateLimit/retry-after_rounds_up"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestRateLimit$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestRateLimit/blocked"
+        }
+      ]
+    },
+    {
+      "id": "C4-5",
+      "kind": "repo",
+      "claim": "限流用連線的 `RemoteAddr` 當 key，程式碼沒有讀 `X-Forwarded-For` 標頭。測試 `TestRateLimit` 的案例 `x-forwarded-for is ignored` 送出不同的 `X-Forwarded-For`，限流器收到的 key 仍然是連線位址。",
+      "claim_en": "The limiter keys on the connection's `RemoteAddr`, and no code reads the `X-Forwarded-For` header. The `TestRateLimit` case `x-forwarded-for is ignored` sends a different `X-Forwarded-For` and the limiter still receives the connection address as its key.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "host, _, err := net.SplitHostPort(r.RemoteAddr)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "Header.Get(\"X-Forwarded-For\")",
+            "ep04",
+            "--",
+            "cmd",
+            "internal"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_test.go",
+          "text": "req.Header.Set(\"X-Forwarded-For\", tt.forwardedFor)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestRateLimit$/^x-forwarded-for_is_ignored$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestRateLimit/x-forwarded-for_is_ignored"
+        }
+      ]
+    },
+    {
+      "id": "C4-6",
+      "kind": "repo",
+      "claim": "限流器是 token bucket：每個 key 一個桶子，桶子有容量上限；每次經過的時間乘以補充速率，補進令牌，但不超過容量；每次請求拿走 1 個令牌。`cmd/api/main.go` 設定每個 IP 每秒補 10 個、容量 20。測試 `TestAllow` 的 4 個案例都通過。",
+      "claim_en": "The limiter is a token bucket: one bucket per key with a capacity; elapsed time times the refill rate is added as tokens, never above the capacity; each request takes 1 token. `cmd/api/main.go` sets 10 tokens per second and a capacity of 20 per IP. All 4 cases of the test `TestAllow` pass.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "text": "b.tokens = math.Min(l.burst, b.tokens+now.Sub(b.last).Seconds()*l.rate)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "text": "b.tokens--"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "text": "buckets   map[string]*bucket"
+        },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "rateLimitPerSecond = 10\\n\\trateLimitBurst\\s+= 20"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestAllow$",
+            "-v",
+            "./internal/platform/ratelimit"
+          ],
+          "output_contains": "--- PASS: TestAllow/refill_never_exceeds_burst"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestAllow$",
+            "-v",
+            "./internal/platform/ratelimit"
+          ],
+          "output_contains": "--- PASS: TestAllow/keys_are_independent"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestAllow$",
+            "-v",
+            "./internal/platform/ratelimit"
+          ],
+          "output_contains": "--- PASS: TestAllow/burst_is_allowed_then_blocked"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestAllow$",
+            "-v",
+            "./internal/platform/ratelimit"
+          ],
+          "output_contains": "--- PASS: TestAllow/tokens_refill_over_time"
+        }
+      ]
+    },
+    {
+      "id": "C4-7",
+      "kind": "repo",
+      "claim": "`Limiter` 用 `sync.Mutex` 保護存桶子的 map：`Allow` 一進來就 `Lock`，並用 `defer` 解鎖。測試 `TestLimiterHoldsUnderConcurrency` 用 20 個 goroutine、每個送 25 個請求，通過的數量沒有超過上限。",
+      "claim_en": "`Limiter` guards the map of buckets with a `sync.Mutex`: `Allow` locks on entry and unlocks with `defer`. The test `TestLimiterHoldsUnderConcurrency` uses 20 goroutines sending 25 requests each, and the number of passed requests stays within the limit.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "pattern": "mu\\s+sync\\.Mutex"
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "pattern": "func \\(l \\*Limiter\\) Allow\\(key string\\) \\(ok bool, retryAfter time\\.Duration\\) \\{\\n\\tl\\.mu\\.Lock\\(\\)\\n\\tdefer l\\.mu\\.Unlock\\(\\)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "for g := 0; g < 20; g++ {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "for i := 0; i < 25; i++ {"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestLimiterHoldsUnderConcurrency$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestLimiterHoldsUnderConcurrency"
+        }
+      ]
+    },
+    {
+      "id": "C4-8",
+      "kind": "repo",
+      "claim": "`sweep` 會刪掉閒置到桶子已經補滿的 key，沒有這一步，map 裡的桶子只增不減。時鐘是注入的：`Limiter` 有一個 `now` 函式欄位，測試用 `fakeClock` 手動往前撥，測試程式裡沒有 `time.Sleep`。測試 `TestSweepDropsIdleKeys` 證明閒置的 key 被刪掉。",
+      "claim_en": "`sweep` deletes keys idle long enough for their bucket to be full again; without it the map of buckets only grows. The clock is injected: `Limiter` has a `now` function field, tests move a `fakeClock` forward by hand, and the test code contains no `time.Sleep`. The test `TestSweepDropsIdleKeys` proves idle keys are deleted.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "text": "func (l *Limiter) sweep(now time.Time) {"
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "pattern": "if now\\.Sub\\(b\\.last\\) >= idle \\{\\n\\t\\t\\tdelete\\(l\\.buckets, k\\)"
+        },
+        {
+          "type": "matches",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "pattern": "now\\s+func\\(\\) time\\.Time"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/ratelimit/ratelimit.go",
+          "text": "func newWithClock(rate float64, burst int, now func() time.Time) *Limiter {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/ratelimit/ratelimit_test.go",
+          "text": "type fakeClock struct{ t time.Time }"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "time.Sleep",
+            "ep04",
+            "--",
+            "internal/platform/ratelimit/ratelimit_test.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestSweepDropsIdleKeys$",
+            "-v",
+            "./internal/platform/ratelimit"
+          ],
+          "output_contains": "--- PASS: TestSweepDropsIdleKeys"
+        }
+      ]
+    },
+    {
+      "id": "C4-9",
+      "kind": "repo",
+      "claim": "`cmd/api/main.go` 把 `RateLimit` 放在 `Session` 前面，所以被限流擋下的請求到不了 session store。測試 `TestFloodFromOneIPIsMostlyRejected` 數 `Create` 被呼叫幾次：建立的 session 數不超過通過的請求數。",
+      "claim_en": "`cmd/api/main.go` places `RateLimit` before `Session`, so a request the limiter rejects never reaches the session store. The test `TestFloodFromOneIPIsMostlyRejected` counts `Create` calls: the sessions created never exceed the requests that passed.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "handler\\.RateLimit\\(limiter, logger\\),\\n\\t\\thandler\\.Session\\(sessions, sessionTTL, logger\\),"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "func (c *countingStore) Create(ctx context.Context) (string, error) {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "if got := store.created.Load(); got > int64(ok) {"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestFloodFromOneIPIsMostlyRejected$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestFloodFromOneIPIsMostlyRejected"
+        }
+      ]
+    },
+    {
+      "id": "C4-10",
+      "kind": "repo",
+      "claim": "session id 是 16 個位元組（128 位元）的隨機數，來自 `crypto/rand`，程式碼沒有用 `math/rand`。cookie 設 `HttpOnly` 與 `SameSite=Lax`。`Session` 用 `context.WithValue` 把 id 放進請求的 context，key 是不匯出的型別 `ctxKey`。測試 `TestSessionCookieSticks` 證明瀏覽器連續 3 次請求，只有第 1 次回應帶 `Set-Cookie`。",
+      "claim_en": "A session id is 16 random bytes (128 bits) from `crypto/rand`; the code does not use `math/rand`. The cookie sets `HttpOnly` and `SameSite=Lax`. `Session` puts the id on the request context with `context.WithValue`, under the unexported key type `ctxKey`. The test `TestSessionCookieSticks` proves that across 3 requests from one browser only the first response carries `Set-Cookie`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/platform/session/memory.go",
+          "text": "raw := make([]byte, 16)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/memory.go",
+          "text": "\"crypto/rand\""
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-F",
+            "-e",
+            "math/rand",
+            "ep04",
+            "--",
+            "internal/platform/session"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "HttpOnly: true,"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "SameSite: http.SameSiteLaxMode,"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "type ctxKey struct{}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "context.WithValue(r.Context(), ctxKey{}, id)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware_integration_test.go",
+          "text": "for i := 0; i < 3; i++ {"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-tags=integration",
+            "-count=1",
+            "-run",
+            "^TestSessionCookieSticks$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestSessionCookieSticks"
+        }
+      ]
+    },
+    {
+      "id": "C4-11",
+      "kind": "repo",
+      "claim": "`handler` 套件宣告 `SessionStore` 介面，只有 `Create` 和 `Exists` 兩個方法。這一章的實作是 `session.Memory`：session 存在行程記憶體的 map 裡，`cmd/api/main.go` 呼叫 `session.NewMemory`。測試 `TestSession` 的 4 個案例都通過：沒有 cookie 就建立 session、認得的 cookie 沿用、不認得的 cookie 換成新的、store 失敗回 500。",
+      "claim_en": "The `handler` package declares the `SessionStore` interface with exactly two methods, `Create` and `Exists`. This chapter's implementation is `session.Memory`: sessions live in a map in process memory, and `cmd/api/main.go` calls `session.NewMemory`. All 4 cases of the test `TestSession` pass: no cookie creates a session, a known cookie is reused, an unknown cookie is replaced, a store failure is a 500.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/handler/middleware.go",
+          "pattern": "type SessionStore interface \\{\\n\\tCreate\\(.*\\n\\tExists\\(.*\\n\\}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/memory.go",
+          "text": "func (m *Memory) Create("
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/memory.go",
+          "text": "func (m *Memory) Exists("
+        },
+        {
+          "type": "contains",
+          "file": "internal/platform/session/memory.go",
+          "text": "sessions map[string]time.Time"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "sessions := session.NewMemory(sessionTTL)"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestSession$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestSession/known_cookie_is_reused"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestSession$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestSession/no_cookie_creates_a_session"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestSession$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestSession/unknown_cookie_is_replaced"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestSession$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestSession/store_failure_is_a_500"
+        }
+      ]
+    },
+    {
+      "id": "C4-12",
+      "kind": "repo",
+      "claim": "`Recover` 用 `defer` 加 `recover` 攔下後面 handler 的 panic，把 panic 的內容與堆疊寫進 log，回給客戶端的是 500 與固定的 `api.Error`（code `internal_error`，message `internal error`）。測試 `TestPanicInsideRouterIsAnAPIError` 證明。",
+      "claim_en": "`Recover` uses `defer` and `recover` to catch a panic in any later handler, writes the panic value and stack to the log, and sends the client a 500 with a fixed `api.Error` (code `internal_error`, message `internal error`). The test `TestPanicInsideRouterIsAnAPIError` proves it.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "logger.Error(\"panic recovered\", \"panic\", rec, \"stack\", string(debug.Stack()))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/middleware.go",
+          "text": "writeJSON(w, logger, http.StatusInternalServerError, api.Error{Code: \"internal_error\", Message: \"internal error\"})"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestPanicInsideRouterIsAnAPIError$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestPanicInsideRouterIsAnAPIError"
+        }
+      ]
+    },
+    {
+      "id": "X4-1",
+      "kind": "reference",
+      "claim": "ASP.NET Core 用 `app.Use` 串 middleware，每個 middleware 呼叫 `next` 才會讓請求繼續往後；Java 的 Servlet Filter 呼叫 `chain.doFilter` 才會繼續。Go 的 middleware 呼叫 `next.ServeHTTP` 達到同樣的效果。",
+      "claim_en": "ASP.NET Core chains middleware with `app.Use`, and a middleware lets the request continue by calling `next`; a Java Servlet Filter continues by calling `chain.doFilter`. A Go middleware does the same by calling `next.ServeHTTP`.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/",
+        "https://docs.oracle.com/javaee/7/api/javax/servlet/Filter.html",
+        "https://pkg.go.dev/net/http#Handler"
+      ]
+    }
+  ]
+}

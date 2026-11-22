@@ -1,0 +1,562 @@
+{
+  "chapter": "ch01",
+  "title": "老闆說明天開賣",
+  "tag": "ep01",
+  "claims": [
+    {
+      "id": "C1-1",
+      "kind": "repo",
+      "claim": "起點的 commit `40ed180` 只有一個 `/healthz` 端點：`cmd/api/main.go` 有 `/healthz`，沒有 `/products`；沒有 `internal/service/product.go`、`internal/repository/product.go`，也沒有 `RequestLog`。",
+      "claim_en": "The starting commit `40ed180` has only a `/healthz` endpoint: `cmd/api/main.go` has `/healthz` and no `/products`; there is no `internal/service/product.go`, no `internal/repository/product.go`, and no `RequestLog`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "/healthz",
+            "40ed180",
+            "--",
+            "cmd/api/main.go"
+          ],
+          "exit": "zero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "/products",
+            "40ed180",
+            "--",
+            "cmd",
+            "internal"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "40ed180:internal/service/product.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "40ed180:internal/repository/product.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "RequestLog",
+            "40ed180",
+            "--",
+            "cmd",
+            "internal"
+          ],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C1-2",
+      "kind": "repo",
+      "claim": "程式分在 `cmd` 與 `internal`：`cmd/api/main.go` 是 `package main` 的進入點；`internal` 底下有 `handler`、`service`、`repository` 三個套件。`internal/platform` 目前只有 `.gitkeep`，沒有 Go 程式。",
+      "claim_en": "The code lives in `cmd` and `internal`: `cmd/api/main.go` is the `package main` entry point, and `internal` holds three packages, `handler`, `service` and `repository`. `internal/platform` holds only `.gitkeep` and no Go code.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "package main"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "func main() {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "package handler"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/product.go",
+          "text": "package service"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "package repository"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep01:internal/platform/.gitkeep"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "^package ",
+            "ep01",
+            "--",
+            "internal/platform"
+          ],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C1-3",
+      "kind": "repo",
+      "claim": "三層的分工寫在各套件的說明註解：`handler` 是 HTTP 層，`service` 放業務邏輯，`repository` 是資料存取層。依賴方向是 `handler` 到 `service` 到 `repository`：`handler` 只 import `service`；`service` 只 import `repository`；`repository` 不 import `service` 或 `handler`；`service` 不 import `handler`；`handler` 不 import `repository`。",
+      "claim_en": "Each package's doc comment states its job: `handler` is the HTTP layer, `service` holds business logic, `repository` is the data access layer. Dependencies point one way, `handler` to `service` to `repository`: `handler` imports only `service`; `service` imports only `repository`; `repository` imports neither `service` nor `handler`; `service` does not import `handler`; `handler` does not import `repository`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "// Package handler is the HTTP layer"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/product.go",
+          "text": "// Package service holds the business logic"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "// Package repository is the data access layer"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "\"github.com/newhand31/go-shop/internal/service\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/product.go",
+          "text": "\"github.com/newhand31/go-shop/internal/repository\""
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "internal/handler",
+            "ep01",
+            "--",
+            "internal/service",
+            "internal/repository"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "internal/service",
+            "ep01",
+            "--",
+            "internal/repository"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "internal/repository",
+            "ep01",
+            "--",
+            "internal/handler"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "build",
+            "./..."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C1-4",
+      "kind": "repo",
+      "claim": "`cmd/api/main.go` 的 `main` 用三行手寫的呼叫接線：`repository.NewMemoryProducts()`、`service.NewProductService(repo)`、`handler.New(svc, logger)`。埠號讀環境變數 `PORT`，沒設就用 `8080`。`go.mod` 只有 `chi` 一個依賴，沒有 DI 容器套件，也沒有資料庫或 Redis 的套件。",
+      "claim_en": "In `cmd/api/main.go`, `main` wires the layers with three hand-written calls: `repository.NewMemoryProducts()`, `service.NewProductService(repo)`, `handler.New(svc, logger)`. The port comes from the `PORT` environment variable and defaults to `8080`. `go.mod` has one dependency, `chi`: no DI container package and no database or Redis package.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "repo := repository\\.NewMemoryProducts\\(\\)\\n\\tsvc := service\\.NewProductService\\(repo\\)\\n\\th := handler\\.New\\(svc, logger\\)"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "port := os.Getenv(\"PORT\")"
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "port = \"8080\""
+        },
+        {
+          "type": "matches",
+          "file": "go.mod",
+          "pattern": "(?s)\\Amodule github\\.com/newhand31/go-shop\\n\\ngo [0-9.]+\\n\\nrequire github\\.com/go-chi/chi/v5 v[0-9.]+\\n*\\z"
+        }
+      ]
+    },
+    {
+      "id": "C1-5",
+      "kind": "repo",
+      "claim": "把 `cmd/api/main.go` 裡 `service.NewProductService(repo)` 的參數拿掉，`go build ./cmd/api` 失敗，錯誤訊息含 `not enough arguments in call to service.NewProductService`。",
+      "claim_en": "After removing the argument from `service.NewProductService(repo)` in `cmd/api/main.go`, `go build ./cmd/api` fails with `not enough arguments in call to service.NewProductService`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "build",
+            "./cmd/api"
+          ],
+          "edit": {
+            "file": "cmd/api/main.go",
+            "old": "service.NewProductService(repo)",
+            "new": "service.NewProductService()"
+          },
+          "exit": "nonzero",
+          "output_contains": "not enough arguments in call to service.NewProductService"
+        }
+      ]
+    },
+    {
+      "id": "C1-6",
+      "kind": "repo",
+      "claim": "`ProductStore` 介面宣告在使用它的 `service` 套件，只列一個方法 `List`；`service` 只有一處呼叫 `s.store`。`repository.MemoryProducts` 有 `List` 方法，沒有任何提到 `ProductStore` 的宣告，`repository` 套件也沒有 import `service`。整個專案編譯通過。",
+      "claim_en": "The `ProductStore` interface is declared in the `service` package that uses it and lists one method, `List`; `service` calls `s.store` in one place. `repository.MemoryProducts` has a `List` method, nothing in `repository` mentions `ProductStore`, and `repository` does not import `service`. The project builds.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/product.go",
+          "pattern": "type ProductStore interface \\{\\n\\tList\\(ctx context\\.Context\\) \\(\\[\\]repository\\.Product, error\\)\\n\\}"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-c",
+            "-e",
+            "s\\.store\\.",
+            "ep01",
+            "--",
+            "internal/service/product.go"
+          ],
+          "output_contains": "product.go:1"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "func (r *MemoryProducts) List(_ context.Context) ([]Product, error) {"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "ProductStore",
+            "ep01",
+            "--",
+            "internal/repository"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "internal/service",
+            "ep01",
+            "--",
+            "internal/repository"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "build",
+            "./..."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C1-7",
+      "kind": "repo",
+      "claim": "`handler.New` 用 `chi` 建立 router，回傳 `net/http` 的 `http.Handler`。它註冊兩條路由：`GET /healthz` 與 `GET /products`，並用 `r.Use(RequestLog(logger))` 掛上日誌 middleware。",
+      "claim_en": "`handler.New` builds a `chi` router and returns `http.Handler` from `net/http`. It registers two routes, `GET /healthz` and `GET /products`, and attaches the logging middleware with `r.Use(RequestLog(logger))`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "\"github.com/go-chi/chi/v5\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "func New(products ProductLister, logger *slog.Logger) http.Handler {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "r := chi.NewRouter()"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "r.Use(RequestLog(logger))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "r.Get(\"/healthz\""
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "r.Get(\"/products\""
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-c",
+            "-e",
+            "r\\.Get(",
+            "ep01",
+            "--",
+            "internal/handler/handler.go"
+          ],
+          "output_contains": "handler.go:2"
+        }
+      ]
+    },
+    {
+      "id": "C1-8",
+      "kind": "repo",
+      "claim": "`RequestLog` 的型別是 `func(http.Handler) http.Handler`。它先記下開始時間，再呼叫 `next.ServeHTTP`，最後用 `slog` 記錄 `method`、`path`、`status`、`duration_ms` 四個欄位。狀態碼來自 `statusRecorder`：它包住 `ResponseWriter`，`WriteHeader` 先記下狀態碼再交給原本的 `ResponseWriter`。",
+      "claim_en": "`RequestLog` has the type `func(http.Handler) http.Handler`. It records the start time, calls `next.ServeHTTP`, then logs four fields with `slog`: `method`, `path`, `status`, `duration_ms`. The status code comes from `statusRecorder`, which wraps the `ResponseWriter`: `WriteHeader` stores the code and then passes it on.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "func RequestLog(logger *slog.Logger) func(http.Handler) http.Handler {"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/handler.go",
+          "pattern": "(?s)start := time\\.Now\\(\\).*?next\\.ServeHTTP\\(rec, r\\).*?logger\\.Info\\(\"request\",\\n\\t+\"method\", r\\.Method,\\n\\t+\"path\", r\\.URL\\.Path,\\n\\t+\"status\", rec\\.status,\\n\\t+\"duration_ms\", time\\.Since\\(start\\)\\.Milliseconds\\(\\),"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/handler.go",
+          "pattern": "func \\(s \\*statusRecorder\\) WriteHeader\\(code int\\) \\{\\n\\ts\\.status = code\\n\\ts\\.ResponseWriter\\.WriteHeader\\(code\\)\\n\\}"
+        }
+      ]
+    },
+    {
+      "id": "C1-9",
+      "kind": "repo",
+      "claim": "`main` 用 `log/slog` 的 JSON handler 把日誌寫到 `os.Stdout`，所以每筆日誌是一行 JSON。",
+      "claim_en": "`main` uses the JSON handler of `log/slog` and writes to `os.Stdout`, so each log record is one line of JSON.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "\"log/slog\""
+        },
+        {
+          "type": "contains",
+          "file": "cmd/api/main.go",
+          "text": "logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))"
+        }
+      ]
+    },
+    {
+      "id": "C1-10",
+      "kind": "repo",
+      "claim": "`TestRoutes` 是 table-driven 測試，表裡有 6 個情境：`/healthz` 回 200、`/products` 有資料、`/products` 空清單回 `[]`、service 出錯回 500、不存在的路徑回 404、`POST /products` 回 405。測試用 `httptest` 直接呼叫 router，沒有啟動伺服器。`go test ./...` 全部通過。",
+      "claim_en": "`TestRoutes` is table-driven with 6 cases: `/healthz` returns 200, `/products` with data, `/products` with an empty list returns `[]`, a service error returns 500, an unknown path returns 404, and `POST /products` returns 405. It calls the router through `httptest` and starts no server. `go test ./...` passes.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"healthz\", http.MethodGet, \"/healthz\", fakeLister{}, http.StatusOK, -1}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"products with data\", http.MethodGet, \"/products\", fakeLister{items: two}, http.StatusOK, 2}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"products empty list returns []\", http.MethodGet, \"/products\", fakeLister{}, http.StatusOK, 0}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"products service error\", http.MethodGet, \"/products\", fakeLister{err: errors.New(\"x\")}, http.StatusInternalServerError, -1}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"unknown path\", http.MethodGet, \"/nope\", fakeLister{}, http.StatusNotFound, -1}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"products rejects POST\", http.MethodPost, \"/products\", fakeLister{}, http.StatusMethodNotAllowed, -1}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "httptest.NewRecorder()"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "ListenAndServe",
+            "ep01",
+            "--",
+            "internal/handler/handler_test.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-v",
+            "-run",
+            "^TestRoutes$",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestRoutes"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "./..."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "C1-11",
+      "kind": "repo",
+      "claim": "`repository.NewMemoryProducts` 內建 3 件商品：機械式鍵盤 2490 元、人體工學滑鼠 1290 元、27 吋螢幕 5990 元。`GET /products` 回傳的 JSON 每件商品有 `id`、`name`、`price_twd` 三個欄位。",
+      "claim_en": "`repository.NewMemoryProducts` has 3 built-in products: a mechanical keyboard at 2490 TWD, an ergonomic mouse at 1290 TWD and a 27-inch monitor at 5990 TWD. `GET /products` returns JSON where each product has the three fields `id`, `name` and `price_twd`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "{ID: 1, Name: \"機械式鍵盤\", PriceTWD: 2490},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "{ID: 2, Name: \"人體工學滑鼠\", PriceTWD: 1290},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/repository/product.go",
+          "text": "{ID: 3, Name: \"27 吋螢幕\", PriceTWD: 5990},"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/handler.go",
+          "pattern": "type productJSON struct \\{\\n\\tID       int    `json:\"id\"`\\n\\tName     string `json:\"name\"`\\n\\tPriceTWD int    `json:\"price_twd\"`\\n\\}"
+        }
+      ]
+    },
+    {
+      "id": "X1-1",
+      "kind": "reference",
+      "claim": "ASP.NET Core 用 `AddScoped` 在服務容器登記介面與實作，由容器建立物件。Java 的 Spring 用 `@Autowired` 註解，由容器注入依賴。",
+      "claim_en": "ASP.NET Core registers an interface and its implementation in the service container with `AddScoped`, and the container creates the object. Java's Spring injects dependencies from its container with the `@Autowired` annotation.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection",
+        "https://docs.spring.io/spring-framework/reference/core/beans/annotation-config/autowired.html"
+      ]
+    },
+    {
+      "id": "X1-2",
+      "kind": "reference",
+      "claim": "Go 的工具鏈規定：放在 `internal` 目錄底下的套件，只有 `internal` 上一層目錄樹裡的程式碼能 import。",
+      "claim_en": "The Go toolchain allows a package under an `internal` directory to be imported only by code in the directory tree rooted at the parent of `internal`.",
+      "sources": [
+        "https://go.dev/doc/go1.4#internalpackages"
+      ]
+    }
+  ]
+}

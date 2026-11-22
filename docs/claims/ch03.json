@@ -1,0 +1,535 @@
+{
+  "chapter": "ch03",
+  "title": "API 的錯誤格式不一致",
+  "tag": "ep03",
+  "claims": [
+    {
+      "id": "C3-1",
+      "kind": "repo",
+      "claim": "tag `ep02` 的程式碼只有 `/healthz` 與 `/products` 兩條路由，沒有 API 契約檔 `api/openapi.yaml`。`internal/handler/handler.go` 出錯時呼叫 `http.Error` 回純文字，也沒有替換路由器預設的 404 與 405 回應。",
+      "claim_en": "The code at tag `ep02` has only the routes `/healthz` and `/products` and no API contract file `api/openapi.yaml`. On failure, `internal/handler/handler.go` calls `http.Error` and returns plain text, and it does not replace the router's default 404 and 405 responses.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep02:api/openapi.yaml"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "cat-file",
+            "-e",
+            "ep03:api/openapi.yaml"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "http.Error(w, \"internal error\", http.StatusInternalServerError)",
+            "ep02",
+            "--",
+            "internal/handler/handler.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "r.NotFound(",
+            "-e",
+            "r.MethodNotAllowed(",
+            "ep02",
+            "--",
+            "internal/handler/handler.go"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "r.Get(\"/products\"",
+            "ep02",
+            "--",
+            "internal/handler/handler.go"
+          ]
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "/products/",
+            "ep02",
+            "--",
+            "internal/handler/handler.go"
+          ],
+          "exit": "nonzero"
+        }
+      ]
+    },
+    {
+      "id": "C3-2",
+      "kind": "repo",
+      "claim": "路由器與生成程式碼的預設回應不是 JSON。在 tag `ep03` 把替換用的函式拿掉，`TestErrorResponsesShareOneShape` 就失敗：沒有自訂的 404 時，`Content-Type` 是 `text/plain; charset=utf-8`；沒有自訂的 405 時，`Content-Type` 是空的；沒有 `ErrorHandlerFunc` 時，路徑參數格式錯誤的回應也是 `text/plain; charset=utf-8`。",
+      "claim_en": "The default responses of the router and of the generated code are not JSON. At tag `ep03`, remove the replacement function and `TestErrorResponsesShareOneShape` fails: without the custom 404 the `Content-Type` is `text/plain; charset=utf-8`; without the custom 405 the `Content-Type` is empty; without `ErrorHandlerFunc`, the response to a malformed path parameter is also `text/plain; charset=utf-8`.",
+      "checks": [
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/handler/handler.go",
+            "old": "r.NotFound(notFound(logger))",
+            "new": "_ = notFound(logger)"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestErrorResponsesShareOneShape$/^unknown_route",
+            "./internal/handler"
+          ],
+          "exit": "nonzero",
+          "output_contains": "Content-Type = \"text/plain; charset=utf-8\", want application/json"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/handler/handler.go",
+            "old": "r.MethodNotAllowed(methodNotAllowed(logger))",
+            "new": "_ = methodNotAllowed(logger)"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestErrorResponsesShareOneShape$",
+            "./internal/handler"
+          ],
+          "exit": "nonzero",
+          "output_contains": "Content-Type = \"\", want application/json"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/handler/handler.go",
+            "old": "ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) { writeError(w, logger, err) },",
+            "new": "ErrorHandlerFunc: nil,"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestErrorResponsesShareOneShape$/^id_is_not_a_number",
+            "./internal/handler"
+          ],
+          "exit": "nonzero",
+          "output_contains": "Content-Type = \"text/plain; charset=utf-8\", want application/json"
+        }
+      ]
+    },
+    {
+      "id": "C3-3",
+      "kind": "repo",
+      "claim": "`api/openapi.yaml` 定義 `Error`，必填欄位是 `code` 與 `message`，選填欄位是 `field`。`/products` 與 `/products/{id}` 兩個操作的 `default` 回應，都指向同一個 `Error` 回應。說明文字寫著 client 依 `code` 判斷，不依 `message`。",
+      "claim_en": "`api/openapi.yaml` defines `Error` with the required fields `code` and `message` and the optional field `field`. The `default` response of both operations, `/products` and `/products/{id}`, points to the same `Error` response. The description says clients switch on `code`, never on `message`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "api/openapi.yaml",
+          "text": "required: [code, message]"
+        },
+        {
+          "type": "matches",
+          "file": "api/openapi.yaml",
+          "pattern": "(?s)        default:\\n          \\$ref: \"#/components/responses/Error\".*        default:\\n          \\$ref: \"#/components/responses/Error\""
+        },
+        {
+          "type": "contains",
+          "file": "api/openapi.yaml",
+          "text": "Clients switch on this, never on message."
+        },
+        {
+          "type": "matches",
+          "file": "api/openapi.yaml",
+          "pattern": "        field:\\n          type: string"
+        }
+      ]
+    },
+    {
+      "id": "C3-4",
+      "kind": "repo",
+      "claim": "`make api` 用固定版本 `v2.8.2` 的 `oapi-codegen`，讀 `api/openapi.yaml` 產生 `internal/api/api.gen.go`。產生的檔案有 `Error`、`Product` 與 `ServerInterface`，檔頭註解寫 `DO NOT EDIT`。`internal/handler/handler.go` 有一行 `var _ api.ServerInterface = (*server)(nil)`；把 `server` 的 `GetProduct` 方法改名後，`go build ./internal/handler` 失敗，錯誤訊息是 `missing method GetProduct`。",
+      "claim_en": "`make api` runs `oapi-codegen` pinned to `v2.8.2`, reads `api/openapi.yaml`, and writes `internal/api/api.gen.go`. The generated file has `Error`, `Product` and `ServerInterface`, and its header comment says `DO NOT EDIT`. `internal/handler/handler.go` has the line `var _ api.ServerInterface = (*server)(nil)`; after renaming the `GetProduct` method of `server`, `go build ./internal/handler` fails with `missing method GetProduct`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "Makefile",
+          "text": "OAPI_CODEGEN_VERSION := v2.8.2"
+        },
+        {
+          "type": "contains",
+          "file": "Makefile",
+          "text": "oapi-codegen@$(OAPI_CODEGEN_VERSION) -config oapi-codegen.yaml api/openapi.yaml"
+        },
+        {
+          "type": "contains",
+          "file": "oapi-codegen.yaml",
+          "text": "output: internal/api/api.gen.go"
+        },
+        {
+          "type": "matches",
+          "file": "internal/api/api.gen.go",
+          "pattern": "(?s)version v2\\.8\\.2 DO NOT EDIT\\..*type Error struct \\{.*type Product struct \\{.*type ServerInterface interface \\{"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "var _ api.ServerInterface = (*server)(nil)"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/handler/handler.go",
+            "old": "func (s *server) GetProduct(",
+            "new": "func (s *server) GetProductRenamed("
+          },
+          "cmd": [
+            "go",
+            "build",
+            "./internal/handler"
+          ],
+          "exit": "nonzero",
+          "output_contains": "missing method GetProduct"
+        }
+      ]
+    },
+    {
+      "id": "C3-5",
+      "kind": "repo",
+      "claim": "`internal/service/errors.go` 有一個哨兵錯誤 `ErrProductNotFound`，用 `errors.New` 建立；還有一個型別化錯誤 `ValidationError`，有 `Field` 與 `Message` 兩個欄位和一個 `Error` 方法。`ProductService.Get` 在 id 小於或等於 0 時回傳 `*ValidationError`。",
+      "claim_en": "`internal/service/errors.go` has a sentinel error `ErrProductNotFound`, created with `errors.New`, and a typed error `ValidationError` with the two fields `Field` and `Message` and an `Error` method. `ProductService.Get` returns a `*ValidationError` when the id is less than or equal to 0.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/errors.go",
+          "text": "var ErrProductNotFound = errors.New(\"product not found\")"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/errors.go",
+          "pattern": "type ValidationError struct \\{\\n\\tField   string\\n\\tMessage string\\n\\}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/errors.go",
+          "text": "func (e *ValidationError) Error() string {"
+        },
+        {
+          "type": "matches",
+          "file": "internal/service/product.go",
+          "pattern": "if id <= 0 \\{\\n\\t\\treturn Product\\{\\}, &ValidationError\\{Field: \"id\""
+        }
+      ]
+    },
+    {
+      "id": "C3-6",
+      "kind": "repo",
+      "claim": "`ProductService.Get` 的回傳值最後一項是 `error`。找不到商品時，它用 `fmt.Errorf(\"get product %d: %w\", id, ErrProductNotFound)` 包裝。把 `%w` 改成 `%v` 後，`TestProductService_Get` 失敗，訊息是 `want errors.Is`。",
+      "claim_en": "The last return value of `ProductService.Get` is an `error`. When the product is missing it wraps the sentinel with `fmt.Errorf(\"get product %d: %w\", id, ErrProductNotFound)`. Change `%w` to `%v` and `TestProductService_Get` fails with `want errors.Is`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/service/product.go",
+          "text": "func (s *ProductService) Get(ctx context.Context, id int) (Product, error) {"
+        },
+        {
+          "type": "contains",
+          "file": "internal/service/product.go",
+          "text": "return Product{}, fmt.Errorf(\"get product %d: %w\", id, ErrProductNotFound)"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/service/product.go",
+            "old": "fmt.Errorf(\"get product %d: %w\", id, ErrProductNotFound)",
+            "new": "fmt.Errorf(\"get product %d: %v\", id, ErrProductNotFound)"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestProductService_Get$",
+            "./internal/service"
+          ],
+          "exit": "nonzero",
+          "output_contains": "want errors.Is"
+        }
+      ]
+    },
+    {
+      "id": "C3-7",
+      "kind": "repo",
+      "claim": "`internal/handler/errors.go` 的 `writeError` 是錯誤回應的出口。它用 `errors.Is` 檢查 `ErrProductNotFound`，回 404 與 `product_not_found`；用 `errors.As` 取出 `*service.ValidationError` 與生成程式碼的三種參數錯誤，回 400 與 `invalid_request`，並把欄位名稱放進 `field`。把 `errors.Is` 換成 `==` 比較後，`TestErrorResponsesShareOneShape` 失敗，訊息是 `status = 500, want 404`。",
+      "claim_en": "`writeError` in `internal/handler/errors.go` is the exit for error responses. It uses `errors.Is` to check for `ErrProductNotFound` and answers 404 with `product_not_found`; it uses `errors.As` to pull out `*service.ValidationError` and the generated code's three parameter errors and answers 400 with `invalid_request`, putting the field name into `field`. Replace `errors.Is` with an `==` comparison and `TestErrorResponsesShareOneShape` fails with `status = 500, want 404`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "case errors.Is(err, service.ErrProductNotFound):"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "status, body = http.StatusNotFound, api.Error{Code: \"product_not_found\", Message: \"product not found\"}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "case errors.As(err, &validation):"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "case errors.As(err, &badParam):"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "case errors.As(err, &missing):"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "case errors.As(err, &tooMany):"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "status, body = http.StatusBadRequest, api.Error{Code: \"invalid_request\", Message: validation.Message, Field: &validation.Field}"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/handler/errors.go",
+            "old": "errors.Is(err, service.ErrProductNotFound)",
+            "new": "err == service.ErrProductNotFound"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestErrorResponsesShareOneShape$",
+            "./internal/handler"
+          ],
+          "exit": "nonzero",
+          "output_contains": "status = 500, want 404"
+        }
+      ]
+    },
+    {
+      "id": "C3-8",
+      "kind": "repo",
+      "claim": "`writeError` 遇到不認得的錯誤，把原因寫進 log，回給 client 的只有 `internal_error` 與 `internal error`。把回應訊息改成原始錯誤文字後，`TestErrorResponsesShareOneShape` 失敗，訊息是 `message leaks internals`。",
+      "claim_en": "When `writeError` meets an error it does not recognise, it logs the cause and the client receives only `internal_error` and `internal error`. Change the response message to the raw error text and `TestErrorResponsesShareOneShape` fails with `message leaks internals`.",
+      "checks": [
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "body   = api.Error{Code: \"internal_error\", Message: \"internal error\"}"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "logger.Error(\"request failed\", \"err\", err)"
+        },
+        {
+          "type": "run",
+          "edit": {
+            "file": "internal/handler/errors.go",
+            "old": "api.Error{Code: \"internal_error\", Message: \"internal error\"}",
+            "new": "api.Error{Code: \"internal_error\", Message: err.Error()}"
+          },
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestErrorResponsesShareOneShape$",
+            "./internal/handler"
+          ],
+          "exit": "nonzero",
+          "output_contains": "message leaks internals"
+        }
+      ]
+    },
+    {
+      "id": "C3-9",
+      "kind": "repo",
+      "claim": "tag `ep03` 的 `internal/handler` 套件沒有任何 `http.Error` 呼叫。`ListProducts` 與 `GetProduct` 出錯時都呼叫 `writeError`。路由器的 404 與 405 換成 `notFound` 與 `methodNotAllowed`，兩者回傳 `api.Error`。生成程式碼的 `ErrorHandlerFunc` 也呼叫 `writeError`。",
+      "claim_en": "The `internal/handler` package at tag `ep03` has no `http.Error` call. `ListProducts` and `GetProduct` call `writeError` on failure. The router's 404 and 405 are replaced by `notFound` and `methodNotAllowed`, which return `api.Error`. The generated code's `ErrorHandlerFunc` also calls `writeError`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "http.Error(",
+            "ep03",
+            "--",
+            "internal/handler"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/handler.go",
+          "pattern": "ListProducts\\(.*\\n.*\\n\\tif err != nil \\{\\n\\t\\twriteError\\(w, s\\.logger, err\\)"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/handler.go",
+          "pattern": "GetProduct\\(.*\\n.*\\n\\tif err != nil \\{\\n\\t\\twriteError\\(w, s\\.logger, err\\)"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "r.NotFound(notFound(logger))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "r.MethodNotAllowed(methodNotAllowed(logger))"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler.go",
+          "text": "ErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) { writeError(w, logger, err) },"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "writeJSON(w, logger, http.StatusNotFound, api.Error{Code: \"route_not_found\", Message: \"no such route\"})"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/errors.go",
+          "text": "writeJSON(w, logger, http.StatusMethodNotAllowed, api.Error{Code: \"method_not_allowed\", Message: \"method not allowed\"})"
+        }
+      ]
+    },
+    {
+      "id": "C3-10",
+      "kind": "repo",
+      "claim": "測試 `TestErrorResponsesShareOneShape` 有 8 列，每列是一種出錯情況：商品不存在、包了兩層的商品不存在、id 不是數字、id 不是正數、列表出錯、單筆出錯、路由不存在、方法不對。每一列都檢查 `Content-Type` 是 JSON、body 能解成沒有多餘欄位的 `api.Error`、`code` 符合預期、`message` 不是空的也不含 `postgres`。這個測試通過。",
+      "claim_en": "The test `TestErrorResponsesShareOneShape` has 8 rows, one per failure: unknown product, a not-found wrapped twice, an id that is not a number, an id that is not positive, a failing list, a failing get, an unknown route and a wrong method. Every row checks that `Content-Type` is JSON, that the body decodes into `api.Error` with no extra fields, that `code` is as expected, and that `message` is not empty and does not contain `postgres`. The test passes.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/handler/handler_test.go",
+          "pattern": "wantField  string\\n\\t\\}\\{\\n(\\t\\t\\{\"[^\\n]*\\},\\n){8}\\t\\}\\n"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"unknown route (router)\", http.MethodGet, \"/nope\", fakeProducts{}, http.StatusNotFound, \"route_not_found\", \"\"},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "{\"wrong method (router)\", http.MethodPost, \"/products\", fakeProducts{}, http.StatusMethodNotAllowed, \"method_not_allowed\", \"\"},"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "strings.HasPrefix(ct, \"application/json\")"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "dec.DisallowUnknownFields()"
+        },
+        {
+          "type": "contains",
+          "file": "internal/handler/handler_test.go",
+          "text": "strings.Contains(got.Message, \"postgres\")"
+        },
+        {
+          "type": "run",
+          "cmd": [
+            "go",
+            "test",
+            "-count=1",
+            "-run",
+            "^TestErrorResponsesShareOneShape$",
+            "-v",
+            "./internal/handler"
+          ],
+          "output_contains": "--- PASS: TestErrorResponsesShareOneShape"
+        }
+      ]
+    },
+    {
+      "id": "C3-11",
+      "kind": "repo",
+      "claim": "`/healthz` 不在 `api/openapi.yaml` 裡。它的 handler 回 200 和純文字 `ok`。",
+      "claim_en": "`/healthz` is not in `api/openapi.yaml`. Its handler answers 200 with the plain text `ok`.",
+      "checks": [
+        {
+          "type": "run",
+          "cmd": [
+            "git",
+            "grep",
+            "-q",
+            "-e",
+            "healthz",
+            "ep03",
+            "--",
+            "api/openapi.yaml"
+          ],
+          "exit": "nonzero"
+        },
+        {
+          "type": "matches",
+          "file": "internal/handler/handler.go",
+          "pattern": "r\\.Get\\(\"/healthz\", func\\(w http\\.ResponseWriter, _ \\*http\\.Request\\) \\{\\n\\t\\tw\\.WriteHeader\\(http\\.StatusOK\\)\\n\\t\\t_, _ = w\\.Write\\(\\[\\]byte\\(\"ok\"\\)\\)"
+        }
+      ]
+    },
+    {
+      "id": "X3-1",
+      "kind": "reference",
+      "claim": "Go 的函式用最後一個回傳值 `error` 回報失敗，呼叫端自己檢查。C# 用 `throw` 丟出例外，由外層的 `catch` 或例外處理器接住。Java 的 checked exception 要在方法簽名用 `throws` 宣告，或在呼叫端接住。",
+      "claim_en": "A Go function reports failure through a last return value of type `error`, and the caller checks it. C# raises an exception with `throw`, caught by an outer `catch` or exception handler. A Java checked exception must be declared with `throws` in the method signature or caught by the caller.",
+      "sources": [
+        "https://go.dev/blog/go1.13-errors",
+        "https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/exceptions/",
+        "https://docs.oracle.com/javase/tutorial/essential/exceptions/catchOrDeclare.html"
+      ]
+    }
+  ]
+}
