@@ -1,0 +1,38 @@
+name: claims
+
+# Checks every claim the video scripts make (docs/claims/*.json) against the code at its tag.
+# -strict turns a skipped claim into a failure, so the Docker-backed checks must really run here.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claims-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  claimcheck:
+    # Skip the pull_request run for branches of this repo: the push run already covers them.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Each chapter is checked at its tag (ep01 ... ep13-pitfalls), so the full history and all tags are needed.
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Docker is running
+        run: docker info --format '{{.ServerVersion}}'
+      - name: Unit tests of the checker
+        run: go test ./cmd/claimcheck
+      - name: Check every claim, strictly
+        run: go run ./cmd/claimcheck -strict

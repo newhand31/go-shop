@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -252,6 +253,9 @@ func (r runner) check(ctx context.Context, co *checkout, k Check) error {
 		}
 		defer undo()
 	}
+	if k.Cmd, err = r.expand(ctx, co.tag, k.Cmd); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, k.Cmd[0], k.Cmd[1:]...)
@@ -266,6 +270,35 @@ func (r runner) check(ctx context.Context, co *checkout, k Check) error {
 		return fmt.Errorf("start %s: %w", strings.Join(k.Cmd, " "), err)
 	}
 	return checkRun(k, exitCode, string(out))
+}
+
+// rootPlaceholder in a run command stands for the first commit in the history of the chapter's tag. A claim
+// about the starting point uses it instead of a commit id, which would go stale if history were ever rewritten.
+const rootPlaceholder = "{root}"
+
+// expand replaces rootPlaceholder in the command. It asks git only when the placeholder is present.
+func (r runner) expand(ctx context.Context, tag string, cmd []string) ([]string, error) {
+	if !slices.ContainsFunc(cmd, func(a string) bool { return strings.Contains(a, rootPlaceholder) }) {
+		return cmd, nil
+	}
+	out, err := exec.CommandContext(ctx, "git", "-C", r.repo, "rev-list", "--max-parents=0", tag).Output()
+	if err != nil {
+		return nil, fmt.Errorf("find the first commit of %s: %w", tag, err)
+	}
+	roots := strings.Fields(string(out))
+	if len(roots) != 1 {
+		return nil, fmt.Errorf("%s has %d root commits, want exactly 1", tag, len(roots))
+	}
+	return substitute(cmd, rootPlaceholder, roots[0]), nil
+}
+
+// substitute returns a copy of cmd with every occurrence of old replaced by new.
+func substitute(cmd []string, old, new string) []string {
+	out := make([]string, len(cmd))
+	for i, a := range cmd {
+		out[i] = strings.ReplaceAll(a, old, new)
+	}
+	return out
 }
 
 // applyEdit changes one file and returns the function that puts it back.

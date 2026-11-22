@@ -6,8 +6,8 @@
     {
       "id": "C1-1",
       "kind": "repo",
-      "claim": "起點的 commit `40ed180` 只有一個 `/healthz` 端點：`cmd/api/main.go` 有 `/healthz`，沒有 `/products`；沒有 `internal/service/product.go`、`internal/repository/product.go`，也沒有 `RequestLog`。",
-      "claim_en": "The starting commit `40ed180` has only a `/healthz` endpoint: `cmd/api/main.go` has `/healthz` and no `/products`; there is no `internal/service/product.go`, no `internal/repository/product.go`, and no `RequestLog`.",
+      "claim": "起點是這個 repo 的第一個 commit，它只有一個 `/healthz` 端點：`cmd/api/main.go` 有 `/healthz`，沒有 `/products`；沒有 `internal/service/product.go`、`internal/repository/product.go`，也沒有 `RequestLog`。",
+      "claim_en": "The starting point is the first commit of this repo, and it has only a `/healthz` endpoint: `cmd/api/main.go` has `/healthz` and no `/products`; there is no `internal/service/product.go`, no `internal/repository/product.go`, and no `RequestLog`.",
       "checks": [
         {
           "type": "run",
@@ -17,7 +17,7 @@
             "-q",
             "-e",
             "/healthz",
-            "40ed180",
+            "{root}",
             "--",
             "cmd/api/main.go"
           ],
@@ -31,7 +31,7 @@
             "-q",
             "-e",
             "/products",
-            "40ed180",
+            "{root}",
             "--",
             "cmd",
             "internal"
@@ -44,7 +44,7 @@
             "git",
             "cat-file",
             "-e",
-            "40ed180:internal/service/product.go"
+            "{root}:internal/service/product.go"
           ],
           "exit": "nonzero"
         },
@@ -54,7 +54,7 @@
             "git",
             "cat-file",
             "-e",
-            "40ed180:internal/repository/product.go"
+            "{root}:internal/repository/product.go"
           ],
           "exit": "nonzero"
         },
@@ -66,7 +66,7 @@
             "-q",
             "-e",
             "RequestLog",
-            "40ed180",
+            "{root}",
             "--",
             "cmd",
             "internal"

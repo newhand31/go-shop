@@ -57,6 +57,8 @@ The checker checks out the chapter's tag into a temporary directory, runs the co
 | `matches` | 該 tag 的 `file` 符合 `pattern` 這個正規表示式。 `file` at the tag matches the regular expression `pattern`. |
 | `run` | 在該 tag 的暫存目錄執行 `cmd`。`exit` 是 `zero`（預設）或 `nonzero`；`output_contains` 是輸出必須含有的字；`edit` 會在執行前先改一處程式碼，用來示範「改掉這裡就編譯失敗」；`requires: ["docker"]` 表示需要 Docker。 Runs `cmd` in the checkout. `edit` changes one piece of code first, to show what breaks without it. |
 
+`cmd` 裡的 `{root}` 代表該 tag 歷史上的第一個 commit，檢查器執行前會換成它的編號。講「起點」的主張用它，不寫死 commit 編號。 In `cmd`, `{root}` stands for the first commit in the tag's history; the checker fills it in before running. Claims about the starting point use it instead of a fixed commit id.
+
 ## 範圍 / Scope
 
 主張清單只保證「口播說的事，在這個 tag 的程式碼上成立」。它不保證做法是唯一正解，也不檢查 `reference` 類的主張。

@@ -54,8 +54,8 @@
     {
       "id": "C5-3",
       "kind": "repo",
-      "claim": "把 `repository.Carts` 的 `RemoveItem` 方法改名後，`go build ./cmd/api` 失敗，錯誤訊息是 `missing method RemoveItem`。",
-      "claim_en": "After renaming the `RemoveItem` method of `repository.Carts`, `go build ./cmd/api` fails with `missing method RemoveItem`.",
+      "claim": "把 `repository.Carts` 的 `RemoveItem` 方法改名後，`go build ./...` 失敗，錯誤訊息是 `missing method RemoveItem`。",
+      "claim_en": "After renaming the `RemoveItem` method of `repository.Carts`, `go build ./...` fails with `missing method RemoveItem`.",
       "checks": [
         {
           "type": "run",
@@ -67,7 +67,7 @@
           "cmd": [
             "go",
             "build",
-            "./cmd/api"
+            "./..."
           ],
           "exit": "nonzero",
           "output_contains": "missing method RemoveItem"

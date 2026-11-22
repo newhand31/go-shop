@@ -104,3 +104,27 @@ func TestCheckRun(t *testing.T) {
 		})
 	}
 }
+
+func TestSubstitute(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  []string
+		want []string
+	}{
+		{"whole argument", []string{"git", "grep", "-q", "x", "{root}"}, []string{"git", "grep", "-q", "x", "abc123"}},
+		{"inside an argument", []string{"git", "cat-file", "-e", "{root}:a.go"}, []string{"git", "cat-file", "-e", "abc123:a.go"}},
+		{"absent", []string{"go", "build", "./..."}, []string{"go", "build", "./..."}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := append([]string(nil), tt.cmd...)
+			got := substitute(tt.cmd, rootPlaceholder, "abc123")
+			if strings.Join(got, " ") != strings.Join(tt.want, " ") {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			if strings.Join(tt.cmd, " ") != strings.Join(in, " ") {
+				t.Fatalf("input was changed to %v", tt.cmd)
+			}
+		})
+	}
+}
