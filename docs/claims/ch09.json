@@ -1,0 +1,216 @@
+{
+  "chapter": "ch09",
+  "title": "庫存被佔",
+  "tag": "ep09",
+  "claims": [
+    {
+      "id": "C9-1",
+      "kind": "repo",
+      "claim": "tag `ep08` 的程式碼沒有任何把庫存還回去的程式：沒有 `internal/service/expiry.go`，沒有 `internal/repository/expiry.go`，`ep08` 的 SQL 查詢裡也沒有 `IncreaseStock`。這三樣是 tag `ep09` 新增的。",
+      "claim_en": "The code at tag `ep08` has nothing that gives stock back: there is no `internal/service/expiry.go`, no `internal/repository/expiry.go`, and no `IncreaseStock` query. All three are added at tag `ep09`.",
+      "checks": [
+        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep08:internal/service/expiry.go"], "exit": "nonzero" },
+        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep08:internal/repository/expiry.go"], "exit": "nonzero" },
+        { "type": "run", "cmd": ["git", "grep", "-q", "-e", "IncreaseStock", "ep08", "--", "db/queries"], "exit": "nonzero" },
+        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep09:internal/service/expiry.go"] },
+        { "type": "run", "cmd": ["git", "cat-file", "-e", "ep09:internal/repository/expiry.go"] },
+        { "type": "contains", "file": "db/queries/products.sql", "text": "-- name: IncreaseStock :exec" }
+      ]
+    },
+    {
+      "id": "C9-2",
+      "kind": "repo",
+      "claim": "種子資料裡「27 吋螢幕」是商品編號 3，庫存 1 件。一張下單後沒有付款的訂單，已經從庫存扣掉那 1 件，螢幕庫存變 0；訂單的 `paid_at` 欄位只有付款時才會被寫入。測試 `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` 的開頭先確認這個狀態。",
+      "claim_en": "In the seed data the 27-inch monitor is product 3 with a stock of 1. An order that was placed and never paid has already taken that 1 unit, so the monitor stock is 0; the order's `paid_at` is written only when a payment arrives. The test `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` first asserts this state.",
+      "checks": [
+        { "type": "contains", "file": "db/migrations/00003_add_stock_and_orders.sql", "text": "UPDATE products SET stock = CASE id WHEN 3 THEN 1 ELSE 10 END;" },
+        { "type": "contains", "file": "db/migrations/00002_seed_products.sql", "text": "('27 吋螢幕', 5990)" },
+        { "type": "contains", "file": "db/queries/payments.sql", "text": "UPDATE orders SET paid_at = COALESCE(paid_at, now()) WHERE id = $1 AND total_twd = $2;" },
+        { "type": "contains", "file": "internal/repository/expiry_integration_test.go", "text": "if stockOf(t, pool, 1) != 8 || stockOf(t, pool, 3) != 0 {" },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestExpiry_UnpaidOrderIsReleasedAndStockComesBack$", "-v", "./internal/repository"],
+          "output_contains": "--- PASS: TestExpiry_UnpaidOrderIsReleasedAndStockComesBack"
+        }
+      ]
+    },
+    {
+      "id": "C9-3",
+      "kind": "repo",
+      "claim": "遷移檔 `00006_add_order_expiry.sql` 為 `orders` 加上 `expired_at` 欄位，並建立索引 `orders_unpaid_idx`：索引只涵蓋 `paid_at` 與 `expired_at` 都是空的訂單，排序欄位是 `created_at`。",
+      "claim_en": "Migration `00006_add_order_expiry.sql` adds an `expired_at` column to `orders` and creates the index `orders_unpaid_idx`, which covers only orders whose `paid_at` and `expired_at` are both empty, ordered by `created_at`.",
+      "checks": [
+        { "type": "contains", "file": "db/migrations/00006_add_order_expiry.sql", "text": "ALTER TABLE orders ADD COLUMN expired_at timestamptz;" },
+        { "type": "contains", "file": "db/migrations/00006_add_order_expiry.sql", "text": "CREATE INDEX orders_unpaid_idx ON orders (created_at) WHERE paid_at IS NULL AND expired_at IS NULL;" }
+      ]
+    },
+    {
+      "id": "C9-4",
+      "kind": "repo",
+      "claim": "查詢 `ClaimExpiredOrder` 一次只取一張訂單：條件是 `paid_at` 為空、`expired_at` 為空、`created_at` 早於截止時間；依 `id` 排序，`LIMIT 1`，並且用 `FOR UPDATE SKIP LOCKED`，已被別的交易鎖住的訂單這一輪直接跳過，不等待。",
+      "claim_en": "The query `ClaimExpiredOrder` takes one order at a time: `paid_at` is empty, `expired_at` is empty, `created_at` is before the cutoff; ordered by `id`, `LIMIT 1`, with `FOR UPDATE SKIP LOCKED`, so an order locked by another transaction is skipped this round instead of waited for.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "db/queries/orders.sql",
+          "pattern": "SELECT id FROM orders\\nWHERE paid_at IS NULL AND expired_at IS NULL AND created_at < \\$1\\nORDER BY id\\nLIMIT 1\\nFOR UPDATE SKIP LOCKED;"
+        }
+      ]
+    },
+    {
+      "id": "C9-5",
+      "kind": "repo",
+      "claim": "`Expiry.ReleaseOne` 在同一個交易裡依序做四件事：取出一張逾期訂單、讀它的品項、把每個品項的數量用 `IncreaseStock` 加回庫存、用 `MarkOrderExpired` 把 `expired_at` 設成現在，最後才 `Commit`。每次呼叫只處理一張訂單。",
+      "claim_en": "`Expiry.ReleaseOne` does four things in one transaction, in this order: claim one expired order, read its lines, add each line's quantity back with `IncreaseStock`, stamp `expired_at` with `MarkOrderExpired`, and only then `Commit`. Each call handles one order.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/repository/expiry.go",
+          "pattern": "(?s)e\\.db\\.Begin\\(ctx\\).*q\\.ClaimExpiredOrder\\(ctx,.*q\\.ListOrderLines\\(ctx, id\\).*for _, l := range lines \\{\\n\\t\\tif err := q\\.IncreaseStock\\(.*q\\.MarkOrderExpired\\(ctx, id\\).*tx\\.Commit\\(ctx\\)"
+        },
+        { "type": "contains", "file": "db/queries/orders.sql", "text": "UPDATE orders SET expired_at = now() WHERE id = $1;" },
+        { "type": "contains", "file": "db/queries/products.sql", "text": "UPDATE products SET stock = stock + $2 WHERE id = $1;" }
+      ]
+    },
+    {
+      "id": "C9-6",
+      "kind": "repo",
+      "claim": "`ListOrderLines` 依 `product_id` 排序；結帳的 `Orders.Place` 在鎖商品之前，也先把品項依 `ProductID` 排序。兩邊鎖商品的順序一致。",
+      "claim_en": "`ListOrderLines` orders by `product_id`, and checkout (`Orders.Place`) also sorts its lines by `ProductID` before locking products. Both sides lock products in the same order.",
+      "checks": [
+        { "type": "contains", "file": "db/queries/orders.sql", "text": "SELECT product_id, quantity FROM order_lines WHERE order_id = $1 ORDER BY product_id;" },
+        { "type": "contains", "file": "internal/repository/orders.go", "text": "sort.Slice(sorted, func(i, j int) bool { return sorted[i].ProductID < sorted[j].ProductID })" },
+        {
+          "type": "matches",
+          "file": "internal/repository/orders.go",
+          "pattern": "(?s)sort\\.Slice\\(sorted.*for _, l := range sorted \\{\\n\\t\\tp, err := q\\.LockProduct\\("
+        }
+      ]
+    },
+    {
+      "id": "C9-7",
+      "kind": "repo",
+      "claim": "`ExpiryJanitor.Run` 用 `time.NewTicker` 建立計時器，並 `defer ticker.Stop()`；每一圈先呼叫 `Sweep`，再用 `select` 等 `ctx.Done()` 或 `ticker.C`，`ctx` 被取消就 `return`。測試 `TestExpiryJanitor_RunStopsWhenContextIsCancelled` 證明 `cancel` 之後 `Run` 會回來。",
+      "claim_en": "`ExpiryJanitor.Run` creates a `time.NewTicker` and defers `ticker.Stop()`; each loop calls `Sweep` and then waits in a `select` for `ctx.Done()` or `ticker.C`, returning when `ctx` is cancelled. The test `TestExpiryJanitor_RunStopsWhenContextIsCancelled` proves `Run` returns after `cancel`.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/expiry.go",
+          "pattern": "ticker := time\\.NewTicker\\(j\\.cfg\\.Interval\\)\\n\\tdefer ticker\\.Stop\\(\\)\\n\\tfor \\{\\n\\t\\tj\\.Sweep\\(ctx\\)\\n\\t\\tselect \\{\\n\\t\\tcase <-ctx\\.Done\\(\\):\\n\\t\\t\\treturn\\n\\t\\tcase <-ticker\\.C:"
+        },
+        {
+          "type": "run",
+          "cmd": ["go", "test", "-count=1", "-run", "^TestExpiryJanitor_RunStopsWhenContextIsCancelled$", "-v", "./internal/service"],
+          "output_contains": "--- PASS: TestExpiryJanitor_RunStopsWhenContextIsCancelled"
+        }
+      ]
+    },
+    {
+      "id": "C9-8",
+      "kind": "repo",
+      "claim": "`ExpiryConfig` 有四個欄位：`Interval`、`OrderTTL`、`RoundTimeout`、`Now`。預設值是每 1 分鐘掃一輪、訂單 15 分鐘沒付款算逾期、單輪期限 30 秒、時鐘是 `time.Now`。`Now` 是函式欄位，測試可以換掉。",
+      "claim_en": "`ExpiryConfig` has four fields: `Interval`, `OrderTTL`, `RoundTimeout`, `Now`. The defaults are one sweep per minute, 15 minutes unpaid before an order counts as expired, a 30-second budget per sweep, and `time.Now` as the clock. `Now` is a function field that tests can replace.",
+      "checks": [
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "Interval     time.Duration    // how often to sweep (default 1 min)" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "OrderTTL     time.Duration    // how long an order may stay unpaid (default 15 min)" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "RoundTimeout time.Duration    // the budget of one sweep (default 30 s)" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "Now          func() time.Time // the clock (default time.Now)" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "c.Interval = time.Minute" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "c.OrderTTL = 15 * time.Minute" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "c.RoundTimeout = 30 * time.Second" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "c.Now = time.Now" },
+        { "type": "contains", "file": "internal/repository/expiry_integration_test.go", "text": "Now:      func() time.Time { return time.Now().Add(time.Hour) }," }
+      ]
+    },
+    {
+      "id": "C9-9",
+      "kind": "repo",
+      "claim": "`Sweep` 每一輪用 `context.WithTimeout` 給自己一個期限（預設 30 秒），`defer cancel()`，並把這個帶期限的 `context` 傳給 `ReleaseOne`。錯誤分三種：錯誤是 `context.DeadlineExceeded` 而外層 `ctx` 沒被取消，記警告並結束這一輪；其他錯誤，外層 `ctx` 沒被取消時記錯誤並結束這一輪；找不到逾期訂單就結束這一輪。測試 `TestExpiryJanitor_SweepIsCancelledWhenTheRoundTimesOut` 把期限設成 20 毫秒，卡住的 store 在期限到時被取消，看到 `DeadlineExceeded`，`Sweep` 回傳 0。",
+      "claim_en": "Each round, `Sweep` gives itself a deadline with `context.WithTimeout` (30 seconds by default), defers `cancel()`, and passes that context to `ReleaseOne`. Errors fall into three cases: `context.DeadlineExceeded` while the outer `ctx` is still live logs a warning and ends the round; any other error logs an error if the outer `ctx` is still live and ends the round; no expired order left ends the round. The test `TestExpiryJanitor_SweepIsCancelledWhenTheRoundTimesOut` sets the budget to 20 milliseconds; the stuck store is cancelled when it runs out, sees `DeadlineExceeded`, and `Sweep` returns 0.",
+      "checks": [
+        {
+          "type": "matches",
+          "file": "internal/service/expiry.go",
+          "pattern": "roundCtx, cancel := context\\.WithTimeout\\(ctx, j\\.cfg\\.RoundTimeout\\)\\n\\tdefer cancel\\(\\)"
+        },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "id, ok, err := j.store.ReleaseOne(roundCtx, cutoff)" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "case errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil:" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "j.logger.Warn(\"expiry sweep ran out of time, next round continues\"" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "j.logger.Error(\"expiry sweep failed\"" },
+        { "type": "contains", "file": "internal/service/expiry.go", "text": "case !ok:" },
+        { "type": "contains", "file": "internal/service/expiry_test.go", "text": "ExpiryConfig{RoundTimeout: 20 * time.Millisecond}" },
+        {
+          "type": "run",
+          "cmd": ["go", "test", "-count=1", "-run", "^TestExpiryJanitor_SweepIsCancelledWhenTheRoundTimesOut$", "-v", "./internal/service"],
+          "output_contains": "--- PASS: TestExpiryJanitor_SweepIsCancelledWhenTheRoundTimesOut"
+        }
+      ]
+    },
+    {
+      "id": "C9-10",
+      "kind": "repo",
+      "claim": "逾期未付款的訂單會被釋放。測試下一張單買商品 1 的 2 件與最後 1 件螢幕，把時鐘撥快 1 小時後掃一輪：回傳釋放 1 張，商品 1 庫存回到 10，螢幕庫存回到 1，訂單的 `expired_at` 有值。再掃一輪釋放 0 張，商品 1 庫存仍是 10。測試 `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` 證明。",
+      "claim_en": "An expired unpaid order is released. The test places an order for 2 units of product 1 and the last monitor, moves the clock forward 1 hour and sweeps once: 1 order is released, product 1 is back to 10, the monitor is back to 1, and the order's `expired_at` is set. A second sweep releases 0 and product 1 stays at 10. The test `TestExpiry_UnpaidOrderIsReleasedAndStockComesBack` proves it.",
+      "checks": [
+        { "type": "contains", "file": "internal/repository/expiry_integration_test.go", "text": "if got := laterJanitor(pool).Sweep(ctx); got != 1 {" },
+        { "type": "contains", "file": "internal/repository/expiry_integration_test.go", "text": "if got := laterJanitor(pool).Sweep(ctx); got != 0 {" },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestExpiry_UnpaidOrderIsReleasedAndStockComesBack$", "-v", "./internal/repository"],
+          "output_contains": "--- PASS: TestExpiry_UnpaidOrderIsReleasedAndStockComesBack"
+        }
+      ]
+    },
+    {
+      "id": "C9-11",
+      "kind": "repo",
+      "claim": "已付款的訂單不會被釋放：用 `Record` 記一筆付款後把時鐘撥快 1 小時，掃一輪釋放 0 張，商品 1 庫存維持 8。剛下單、還沒付款的訂單用真的時鐘掃，也釋放 0 張。測試 `TestExpiry_PaidOrderIsLeftAlone` 與 `TestExpiry_RecentUnpaidOrderIsLeftAlone` 證明。",
+      "claim_en": "A paid order is not released: after recording a payment with `Record` and moving the clock forward 1 hour, a sweep releases 0 and product 1 stays at 8. A just-placed unpaid order swept with the real clock also releases 0. The tests `TestExpiry_PaidOrderIsLeftAlone` and `TestExpiry_RecentUnpaidOrderIsLeftAlone` prove it.",
+      "checks": [
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestExpiry_PaidOrderIsLeftAlone$", "-v", "./internal/repository"],
+          "output_contains": "--- PASS: TestExpiry_PaidOrderIsLeftAlone"
+        },
+        {
+          "type": "run",
+          "requires": ["docker"],
+          "cmd": ["go", "test", "-tags=integration", "-count=1", "-run", "^TestExpiry_RecentUnpaidOrderIsLeftAlone$", "-v", "./internal/repository"],
+          "output_contains": "--- PASS: TestExpiry_RecentUnpaidOrderIsLeftAlone"
+        }
+      ]
+    },
+    {
+      "id": "C9-12",
+      "kind": "repo",
+      "claim": "`cmd/api/main.go` 用同一個 `workerCtx` 啟動兩個 goroutine：寄信的 outbox worker 與 `ExpiryJanitor`。收尾的 `defer` 先呼叫 `stopWorker()`，再等 `workerDone` 與 `janitorDone` 兩個 channel。`main.go` 另有一行編譯期檢查，確認 `repository.Expiry` 滿足 `service.ExpiryStore`。",
+      "claim_en": "`cmd/api/main.go` starts two goroutines on the same `workerCtx`: the outbox worker that sends mail and the `ExpiryJanitor`. The closing `defer` calls `stopWorker()` and then waits on both `workerDone` and `janitorDone`. `main.go` also holds a compile-time assertion that `repository.Expiry` satisfies `service.ExpiryStore`.",
+      "checks": [
+        { "type": "contains", "file": "cmd/api/main.go", "text": "dispatcher.Run(workerCtx)" },
+        { "type": "contains", "file": "cmd/api/main.go", "text": "janitor.Run(workerCtx)" },
+        { "type": "contains", "file": "cmd/api/main.go", "text": "_ service.ExpiryStore      = (*repository.Expiry)(nil)" },
+        {
+          "type": "matches",
+          "file": "cmd/api/main.go",
+          "pattern": "defer func\\(\\) \\{\\n\\t\\tstopWorker\\(\\)\\n\\t\\t<-workerDone\\n\\t\\t<-janitorDone\\n\\t\\}\\(\\)"
+        }
+      ]
+    },
+    {
+      "id": "X9-1",
+      "kind": "reference",
+      "claim": "C# 的 `CancellationTokenSource` 可以建立在一段時間後自動取消的權杖，背景工作常寫成繼承 `BackgroundService` 的類別。Java 的 Spring 用 `@Scheduled` 註解排程。Go 的標準庫提供 `time.Ticker` 與 `context.WithTimeout`，由程式自己組合。",
+      "claim_en": "In C#, `CancellationTokenSource` can create a token that cancels itself after a delay, and background work is commonly a class derived from `BackgroundService`. In Java, Spring schedules work with the `@Scheduled` annotation. Go's standard library provides `time.Ticker` and `context.WithTimeout`, which the program combines itself.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/dotnet/api/system.threading.cancellationtokensource",
+        "https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.hosting.backgroundservice",
+        "https://docs.spring.io/spring-framework/reference/integration/scheduling.html",
+        "https://pkg.go.dev/context#WithTimeout",
+        "https://pkg.go.dev/time#NewTicker"
+      ]
+    }
+  ]
+}
