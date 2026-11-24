@@ -50,7 +50,9 @@
 - 本 repo 是公開的。不放密鑰、個人資料、本機路徑；不點名評論真人或其他創作者。
 - 程式碼識別字、註解、測試案例名、commit 訊息一律英文（觀眾含英語市場）。
 - README 中英雙語；改一邊要同步另一邊。
-- 腳本按語言分：中文 `docs/scripts/epNN.md`，英文 `docs/scripts/en/epNN.md`。英文腳本照 `docs/style-guide.md` §6 重寫笑點，不直譯。英文版上獨立的英文頻道，語言對照以 Java 為主、C# 為輔（中文版維持 C# 為主）。
+- 英文優先（2026-11-24 決策）：英文口播是唯一正本，中文是逐句翻譯的 CC 字幕，同一個頻道。配音用本地 Kokoro-82M、聲音 `af_heart`。語言對照以 C# 為主、Java 為輔。
+- 第一版幽默文案的腳本留著對照、不再更新：中文 `docs/scripts/epNN.md`，英文 `docs/scripts/en/epNN.md`。
+- 多語言計畫（C#、Rust、前端各系列）的排程與驗收見 `docs/plans/2026-11-24-polyglot-program.md`。
 - 授權：程式碼 MIT（`LICENSE`），`docs/` 為 CC BY-NC 4.0（`docs/LICENSE.md`）。
 
 ## 決策紀錄
