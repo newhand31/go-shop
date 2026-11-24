@@ -1,6 +1,6 @@
 # 多語言計畫：同一份契約，多個後端與前端系列（英文優先）
 
-- 指揮台：未定（開工的窗填），工作鍵 `newhand31/go-shop:polyglot-program`
+- 指揮台：`local_2e9951ea-e36b-4957-bf04-350ce6475691`（2026-11-24 開工），工作鍵 `newhand31/go-shop:polyglot-program`
 - 決策：`state/decisions/2026-11-24-204538-5d23bfb0.md`（英文優先與配音）、`state/decisions/2026-11-24-204539-f51a378a.md`（多語言計畫）
 - 使用者點頭：2026-11-24 同意全部排程、自動推進、每系列先行章把關
 - tick：on（指揮窗不在時，排程 tick 可以推進本計畫）
@@ -72,7 +72,7 @@
 |---|---|---|
 | `go-shop` | Go 系列（本 repo） | 已有 |
 | `go-shop-video` | 影片產線，擴充成支援多個 repo 與雙語 | 已有 |
-| `shop-contract` | 完整契約、共用 migration、契約測試（Hurl、Schemathesis、k6） | 待建 |
+| `shop-contract` | 完整契約、共用 migration、契約測試（Hurl、Schemathesis、k6） | 已建（私人） |
 | `cs-shop` | C# 系列：.NET 10、ASP.NET Core Minimal API | 待建 |
 | `rs-shop` | Rust 系列：axum＋sqlx | 待建 |
 | `shop-web` | 前端 monorepo：`packages/core`（產生的 API client＋TanStack Query 查詢定義）、`packages/tokens`、`packages/e2e`、`apps/next`、`apps/nuxt`、`apps/sveltekit`、`apps/angular` | 待建 |
@@ -83,9 +83,9 @@
 
 | id | 內容 | repo | 依賴 | 先行章 | 狀態 |
 |---|---|---|---|---|---|
-| P0a | 產線雙語化：分鏡 `narration: { en, zh }`、句數檢查、Kokoro 配音、念法對照表、音量正規化、whisper 取時間點、英文與中文 SRT、長片不燒字幕。長片組裝：把各章接成一支、產生章節時間戳與合併後的 SRT。補英文口播規範與口播結構到 `docs/plain-style-guide.md` | go-shop-video、go-shop | — | — | todo |
+| P0a | 產線雙語化：分鏡 `narration: { en, zh }`、句數檢查、Kokoro 配音、念法對照表、音量正規化、whisper 取時間點、英文與中文 SRT、長片不燒字幕。長片組裝：把各章接成一支、產生章節時間戳與合併後的 SRT。補英文口播規範與口播結構到 `docs/plain-style-guide.md` | go-shop-video、go-shop | — | — | doing |
 | P0b | Go 英文版：一支長片（13 章，英文口播與中文 CC）、13 支 Short。改 `CLAUDE.md`、README 的語言說明 | go-shop、go-shop-video | P0a | ch05 | todo |
-| P0c | 建 `shop-contract`：完整契約（含付款回呼、搶購）、L1–L11 契約測試，拿 go-shop 跑到全綠 | shop-contract | — | — | todo |
+| P0c | 建 `shop-contract`：完整契約（含付款回呼、搶購）、L1–L11 契約測試，拿 go-shop 跑到全綠 | shop-contract | — | — | doing |
 | P0d | go-shop 新增一章：「開始付款」與「查訂單」兩支 API，進契約，打新 tag | go-shop、shop-contract | P0c | — | todo |
 | P1 | C# 系列 13 章：程式碼、tag、主張清單、一支長片、Short | cs-shop | P0a、P0c | ch01 | todo |
 | P2 | 前端共用篇 4 章（一支長片）：從契約產生 client、設計 token、錯誤碼對照、同一份 E2E | shop-web | P0a、P0d | ch01 | todo |
@@ -95,6 +95,20 @@
 | P6 | 對照特輯 4 支：超賣、付兩次、部署斷線各三種語言對照；換後端、前端不用改 | go-shop-video | P1、P4、P5 | 第 1 支 | todo |
 
 前端每個框架的 8 章：開賣頁空白（骨架、路由）、搜尋引擎找不到商品（SSR）、加入購物車沒反應（資料抓取、樂觀更新）、換頁購物車就空了（SSR 轉送 cookie）、錯誤訊息看不懂（表單、欄位錯誤）、結帳按兩次（送出中的狀態）、手機看不到結帳鈕與讀螢幕軟體用不了（元件、無障礙）、首頁好慢與部署（效能、建置、換後端）。
+
+## 執行紀錄
+
+指揮窗每次改狀態時更新。證據以 git 與 gh 實查為準，不採執行者自述。
+
+| id | 執行者 | 分支／工作鍵 | 證據 |
+|---|---|---|---|
+| P0a | `agent:worker`（2026-11-24 派出） | 產線：`local/go-shop-video:feat/bilingual-pipeline`（該 repo 沒有 remote，只在本機）；口播規範：`newhand31/go-shop:feat/english-narration-guide` | — |
+| P0c | `agent:worker`（2026-11-24 派出） | `newhand31/shop-contract:feat/contract-l1-l11` | repo 建立時是私人的，`main` 只有一個 README commit |
+
+- P0a 的驗收指令：產線分支上 `npm run verify` exit 0；`go-shop` 的 PR 只動 `docs/plain-style-guide.md` 且 `go run ./cmd/claimcheck -strict` 通過。
+- P0c 的驗收指令：`shop-contract` 的全跑指令對 `go-shop` 的 `main`，L1–L11 都 `PASS`；`go-shop` 做不到的級標 `BLOCKED` 並記在 `shop-contract` 的 `docs/gaps.md`，由指揮窗決定怎麼補。
+- 產線 repo 的未追蹤資料夾 `episodes/measure01/` 已查：是另一個專案留下的試轉檔，沒有別的窗在做，本計畫不動它。
+- 畫面與縮圖的風格還沒查證。P0a 不改畫面設計，留到 P0b 的先行章之前查。
 
 ## 開工順序
 
