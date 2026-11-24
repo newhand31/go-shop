@@ -89,7 +89,7 @@
 | P0a | 產線雙語化：分鏡 `narration: { en, zh }`、句數檢查、Kokoro 配音、念法對照表、音量正規化、whisper 取時間點、英文與中文 SRT、長片不燒字幕。長片組裝：把各章接成一支、產生章節時間戳與合併後的 SRT。補英文口播規範與口播結構到 `docs/plain-style-guide.md` | go-shop-video、go-shop | — | — | doing |
 | P0b | Go 英文版：一支長片（13 章，英文口播與中文 CC）、13 支 Short。改 `CLAUDE.md`、README 的語言說明 | go-shop、go-shop-video | P0a、P0e1 | ch05 | todo |
 | P0c | 建 `shop-contract`：完整契約（含付款回呼、搶購）、L1–L11 契約測試，拿 go-shop 跑到全綠 | shop-contract | — | — | doing |
-| P0d | go-shop 新增一章：「開始付款」與「查訂單」兩支 API，進契約，打新 tag | go-shop、shop-contract | P0c | — | todo |
+| P0d | go-shop 新增一章：「開始付款」與「查訂單」兩支 API，進契約，打新 tag。同一片補 P0c 找到的三個缺口，讓 L7、L8、L10 變 `PASS`：用設定選的 SMTP 寄信、訂單逾期時間與清掃間隔可設定、接受進來的 `traceparent`（既有 tag 不動，改在 `main` 上）。契約測試那邊補四件：被擋的級在缺口補上後要變紅、L10 的缺口只認「追蹤編號不同」這一種失敗、L5／L6／L9／L11 各做一次故意弄壞的驗證、L11 加一個慢請求 | go-shop、shop-contract | P0c | — | todo |
 | P0e1 | 示範店面前三段：一個 Next.js 店面，就是 `shop-web` 的 `apps/next` 最小版，先做商品、購物車、結帳（現有的 6 支 API 就夠用），後端網址用設定切換。每個事故一支 Playwright 腳本，自動錄下「事故發生」與「事故不再發生」兩段畫面。產線能把錄好的片段插進分鏡。作者 2026-11-24 同意先做這三段，P0a 或 P0c 的線一空出來就開 | shop-web、go-shop-video | — | — | doing |
 | P0e2 | 示範店面後兩段：付款與查訂單，補上對應事故的 Playwright 腳本 | shop-web | P0e1、P0d | — | todo |
 | P1 | C# 系列 13 章：程式碼、tag、主張清單、一支長片、Short | cs-shop | P0a、P0c、P0e2 | ch01 | todo |
@@ -109,7 +109,7 @@
 | id | 執行者 | 分支／工作鍵 | 證據 |
 |---|---|---|---|
 | P0a | `agent:worker`（2026-11-24 派出） | 產線：`local/go-shop-video:feat/bilingual-pipeline`（該 repo 沒有 remote，只在本機）；口播規範：`newhand31/go-shop:feat/english-narration-guide` | 驗收中。產線 commit `25d453a`、`4c3fa2c`，指揮窗自己跑 `npm run verify` exit 0；口播規範是 PR 26（head `40ea2b5`，只動 `docs/plain-style-guide.md`）。全新 checker 第 1 輪審查中 |
-| P0c | `agent:worker`（2026-11-24 派出） | `newhand31/shop-contract:feat/contract-l1-l11` | repo 建立時是私人的，`main` 只有一個 README commit |
+| P0c | `agent:worker`（2026-11-24 派出） | `newhand31/shop-contract:feat/contract-l1-l11` | 驗收過，等合併。PR `newhand31/shop-contract` 1 號（head `f9fb77c`，8 個 commit 都在遠端分支，56 檔，沒有本機路徑；repo 是私人的）。指揮窗自己跑全跑指令：結束碼 2，L1–L6、L9、L11 `PASS`，L7、L8、L10 `BLOCKED`，沒有 `FAIL`。全新 checker 第 1 輪：通過，0 個高、4 個中、8 個低。被擋的三級與 4 個中等問題併進 P0d |
 | P0e1 | `agent:worker`（2026-11-24 派出） | `newhand31/shop-web:feat/storefront-first-three` | repo 建立時是私人的。這一片只做 `shop-web`；產線插入錄影片段的部分等 P0a 的分支併進產線 `main` 再做 |
 
 - P0e1 的驗收指令：`pnpm verify`（typecheck、lint、build、E2E 對 `go-shop` 的 `main`）exit 0；`pnpm record ch05` 產出事故發生與事故不再發生兩段錄影。
