@@ -92,7 +92,7 @@ func TestPaymentStarterStartPayment(t *testing.T) {
 			if form.OrderID != 12 || form.ActionURL != verifier.CheckoutURL() {
 				t.Errorf("form = %+v", form)
 			}
-			want := map[string]string{"MerchantTradeNo": "GS12", "TotalAmount": "5990", "ReturnURL": "https://shop.example/payments/ecpay/callback", "MerchantTradeDate": "2026/11/24 18:00:00"}
+			want := map[string]string{"MerchantTradeNo": ecpay.AttemptRef(12, time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)), "TotalAmount": "5990", "ReturnURL": "https://shop.example/payments/ecpay/callback", "MerchantTradeDate": "2026/11/24 18:00:00"}
 			for k, v := range want {
 				if form.Fields[k] != v {
 					t.Errorf("field %s = %q, want %q", k, form.Fields[k], v)

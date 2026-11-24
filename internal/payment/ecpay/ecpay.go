@@ -136,20 +136,46 @@ func (v *Verifier) Sign(params url.Values) url.Values {
 	return out
 }
 
-// OrderRef is the MerchantTradeNo for an order id. ECPay allows at most 20 letters and digits.
+// OrderRef is the MerchantTradeNo "GS<id>". ECPay allows at most 20 letters and digits. The checkout form no longer uses
+// it (see AttemptRef); it is still accepted by ParseOrderRef so callbacks that carry it keep working.
 func OrderRef(orderID int) string { return "GS" + strconv.Itoa(orderID) }
 
-// ParseOrderRef is the inverse of OrderRef.
+// AttemptRef is the MerchantTradeNo of one payment attempt: "GS<id>T<time>", the time in milliseconds written in base 36
+// (8 characters today). ECPay's documentation says a merchant trade number is unique and must not be reused, so a visitor
+// who closes the ECPay tab and starts again needs a new number for the same order. 20 characters is the limit, which
+// holds for order ids up to 9 digits.
+func AttemptRef(orderID int, at time.Time) string {
+	return OrderRef(orderID) + "T" + strconv.FormatInt(at.UnixMilli(), 36)
+}
+
+// ParseOrderRef reads the order id back from an OrderRef or an AttemptRef.
 func ParseOrderRef(ref string) (int, error) {
 	rest, ok := strings.CutPrefix(ref, "GS")
 	if !ok {
 		return 0, fmt.Errorf("%w: unknown MerchantTradeNo %q", ErrMalformed, ref)
 	}
-	id, err := strconv.Atoi(rest)
+	digits, attempt, hasAttempt := strings.Cut(rest, "T")
+	if hasAttempt && !isBase36(attempt) {
+		return 0, fmt.Errorf("%w: unknown MerchantTradeNo %q", ErrMalformed, ref)
+	}
+	id, err := strconv.Atoi(digits)
 	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("%w: unknown MerchantTradeNo %q", ErrMalformed, ref)
 	}
 	return id, nil
+}
+
+// isBase36 reports whether s is a non-empty run of digits and lower-case letters.
+func isBase36(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 // Where ECPay's checkout page lives. The sandbox accepts only the public sandbox merchant; real money goes to the other.
@@ -185,7 +211,7 @@ var taipei = time.FixedZone("CST", 8*60*60)
 func (v *Verifier) CheckoutFields(r CheckoutRequest) url.Values {
 	f := url.Values{}
 	f.Set("MerchantID", v.merchantID)
-	f.Set("MerchantTradeNo", OrderRef(r.OrderID))
+	f.Set("MerchantTradeNo", AttemptRef(r.OrderID, r.Now))
 	f.Set("MerchantTradeDate", r.Now.In(taipei).Format("2006/01/02 15:04:05"))
 	f.Set("PaymentType", "aio")
 	f.Set("TotalAmount", strconv.Itoa(r.AmountTWD))

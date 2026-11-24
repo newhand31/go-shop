@@ -146,8 +146,10 @@ paths:
       operationId: startPayment
       summary: Start paying an order with ECPay. Answers the signed form the browser must POST to ECPay.
       description: |
-        Calling it again for the same unpaid order gives the same form again, so a visitor who closed the ECPay tab can
-        come back. An order that is paid or expired cannot be paid: 409 `order_not_payable`.
+        Calling it again for the same unpaid order gives a new form for the same order and amount, so a visitor who closed
+        the ECPay tab can come back. Only `MerchantTradeNo` (a new number per attempt, because ECPay does not accept a
+        number twice), `MerchantTradeDate` and the signature change. Whichever attempt the visitor pays, the callback
+        marks this order paid. A started payment is not recorded: nothing changes until ECPay calls back. An order that is paid or expired cannot be paid: 409 `order_not_payable`.
       parameters:
         - name: orderId
           in: path

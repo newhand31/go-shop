@@ -41,7 +41,11 @@ func NewPaymentStarter(orders OrderLookup, signer CheckoutSigner, returnURL stri
 }
 
 // StartPayment returns the signed form for one unpaid order. It stores nothing: the order row already says what is owed, and
-// the callback is what records the payment. Calling it twice therefore returns the same fields, apart from the date.
+// the callback is what records the payment. Calling it twice therefore returns the same order, amount and callback address; the trade number and the date are new each time,
+// because ECPay does not accept a trade number twice (see ecpay.AttemptRef).
+//
+// Known limit: an order past its lifetime but not yet swept still counts as unpaid here, and the form has no expiry of its own. If
+// ECPay charges after the janitor released the stock, the callback still marks the order paid ("paid wins", see statusOf).
 func (s *PaymentStarter) StartPayment(ctx context.Context, orderID int) (PaymentForm, error) {
 	order, err := NewOrderReadService(s.orders).Get(ctx, orderID)
 	if err != nil {
