@@ -86,11 +86,11 @@
 
 | id | 內容 | repo | 依賴 | 先行章 | 狀態 |
 |---|---|---|---|---|---|
-| P0a | 產線雙語化：分鏡 `narration: { en, zh }`、句數檢查、Kokoro 配音、念法對照表、音量正規化、whisper 取時間點、英文與中文 SRT、長片不燒字幕。長片組裝：把各章接成一支、產生章節時間戳與合併後的 SRT。補英文口播規範與口播結構到 `docs/plain-style-guide.md` | go-shop-video、go-shop | — | — | doing |
+| P0a | 產線雙語化：分鏡 `narration: { en, zh }`、句數檢查、Kokoro 配音、念法對照表、音量正規化、whisper 取時間點、英文與中文 SRT、長片不燒字幕。長片組裝：把各章接成一支、產生章節時間戳與合併後的 SRT。補英文口播規範與口播結構到 `docs/plain-style-guide.md` | go-shop-video、go-shop | — | — | done |
 | P0b | Go 英文版：一支長片（13 章，英文口播與中文 CC）、13 支 Short。改 `CLAUDE.md`、README 的語言說明 | go-shop、go-shop-video | P0a、P0e1 | ch05 | todo |
 | P0c | 建 `shop-contract`：完整契約（含付款回呼、搶購）、L1–L11 契約測試，拿 go-shop 跑到全綠 | shop-contract | — | — | done |
 | P0d | go-shop 新增一章：「開始付款」與「查訂單」兩支 API，進契約，打新 tag。同一片補 P0c 找到的三個缺口，讓 L7、L8、L10 變 `PASS`：用設定選的 SMTP 寄信、訂單逾期時間與清掃間隔可設定、接受進來的 `traceparent`（既有 tag 不動，改在 `main` 上）。契約測試那邊補四件：被擋的級在缺口補上後要變紅、L10 的缺口只認「追蹤編號不同」這一種失敗、L5／L6／L9／L11 各做一次故意弄壞的驗證、L11 加一個慢請求 | go-shop、shop-contract | P0c | — | todo |
-| P0e1 | 示範店面前三段：一個 Next.js 店面，就是 `shop-web` 的 `apps/next` 最小版，先做商品、購物車、結帳（現有的 6 支 API 就夠用），後端網址用設定切換。每個事故一支 Playwright 腳本，自動錄下「事故發生」與「事故不再發生」兩段畫面。產線能把錄好的片段插進分鏡。作者 2026-11-24 同意先做這三段，P0a 或 P0c 的線一空出來就開 | shop-web、go-shop-video | — | — | doing |
+| P0e1 | 示範店面前三段：一個 Next.js 店面，就是 `shop-web` 的 `apps/next` 最小版，先做商品、購物車、結帳（現有的 6 支 API 就夠用），後端網址用設定切換。每個事故一支 Playwright 腳本，自動錄下「事故發生」與「事故不再發生」兩段畫面。產線能把錄好的片段插進分鏡。作者 2026-11-24 同意先做這三段，P0a 或 P0c 的線一空出來就開 | shop-web、go-shop-video | — | — | done |
 | P0e2 | 示範店面後兩段：付款與查訂單，補上對應事故的 Playwright 腳本 | shop-web | P0e1、P0d | — | todo |
 | P1 | C# 系列 13 章：程式碼、tag、主張清單、一支長片、Short | cs-shop | P0a、P0c、P0e2 | ch01 | todo |
 | P2 | 前端共用篇 4 章（一支長片）：從契約產生 client、設計 token、錯誤碼對照、同一份 E2E | shop-web | P0a、P0d、P0e2 | ch01 | todo |
@@ -108,9 +108,9 @@
 
 | id | 執行者 | 分支／工作鍵 | 證據 |
 |---|---|---|---|
-| P0a | `agent:worker`（2026-11-24 派出） | 產線：`local/go-shop-video:feat/bilingual-pipeline`（該 repo 沒有 remote，只在本機）；口播規範：`newhand31/go-shop:feat/english-narration-guide` | 驗收過，產線分支等合併。產線分支在第 1 輪修正後多 6 個 commit（head `7570c70`）；指揮窗清掉快取重跑 `npm run verify` exit 0，12 段配音與 12 段轉錄都沒走快取。全新 checker 第 2 輪：通過，0 個高、2 個中、3 個低。兩個中等問題是環境變數能放寬檢查（`ALLOW_FAKE_TIMINGS`、`PIPELINE_CONFIG`、`CLAIMS_LOCAL`），排進「產線插入錄影片段」那一片一起修。口播規範的 PR 26 已併（merge commit `cdb24cc`）。舊的 39 集字串分鏡現在會直接報錯、不能配音，要搬成 `{ en, zh }` 才能用，這在 P0b 處理 |
+| P0a | `agent:worker`（2026-11-24 派出） | 產線：`local/go-shop-video:feat/bilingual-pipeline`（該 repo 沒有 remote，只在本機）；口播規範：`newhand31/go-shop:feat/english-narration-guide` | 完成。產線分支 2026-11-25 併進產線 `main`（本機 merge commit `5d7f194`，作者說由指揮窗併；這個 repo 沒有遠端）。併完在產線主 checkout 跑單元測試：46 過、1 不過。不過的是「沒搬的集數配音會失敗且不產生輸出」那一條，它假設 `public/ch05` 不存在，但主 checkout 留有舊的配音輸出；在乾淨的 worktree 會過。這是測試寫法的問題，排進「產線插入錄影片段」那一片修。以下是併之前的驗收紀錄。產線分支在第 1 輪修正後多 6 個 commit（head `7570c70`）；指揮窗清掉快取重跑 `npm run verify` exit 0，12 段配音與 12 段轉錄都沒走快取。全新 checker 第 2 輪：通過，0 個高、2 個中、3 個低。兩個中等問題是環境變數能放寬檢查（`ALLOW_FAKE_TIMINGS`、`PIPELINE_CONFIG`、`CLAIMS_LOCAL`），排進「產線插入錄影片段」那一片一起修。口播規範的 PR 26 已併（merge commit `cdb24cc`）。舊的 39 集字串分鏡現在會直接報錯、不能配音，要搬成 `{ en, zh }` 才能用，這在 P0b 處理 |
 | P0c | `agent:worker`（2026-11-24 派出） | `newhand31/shop-contract:feat/contract-l1-l11` | 完成。PR `newhand31/shop-contract` 1 號已併（merge commit `b1d961c`，作者 2026-11-25 說由指揮窗併）。指揮窗自己跑全跑指令：結束碼 2，L1–L6、L9、L11 `PASS`，L7、L8、L10 `BLOCKED`，沒有 `FAIL`。全新 checker 第 1 輪：通過，0 個高、4 個中、8 個低。被擋的三級與 4 個中等問題併進 P0d |
-| P0e1 | `agent:worker`（2026-11-24 派出） | `newhand31/shop-web:feat/storefront-first-three` | 驗收過，等合併。PR `newhand31/shop-web` 1 號，兩輪修正後 head 含 `42a5942`、`13549ed`（repo 是私人的）。指揮窗從全新 clone 跑安裝、`pnpm verify`、`pnpm record ch05` 都 exit 0，跑前跑後 `go-shop` 的 worktree 清單完全相同。全新 checker 第 3 輪：通過，0 個高、1 個中、3 個低。剩下的中等問題：兩個啟動器同時跑時，後到的失敗後會清掉先到的暫時 worktree（只傷啟動器自己的暫存）。第 5 章的事故補丁查過是真的改後端，沒有造假。第 6 章超賣的錄影還沒做，留到 P0b 做到那一章時補。產線插入錄影片段的部分等 P0a 的分支併進產線 `main` 再做 |
+| P0e1 | `agent:worker`（2026-11-24 派出） | `newhand31/shop-web:feat/storefront-first-three` | 完成。PR `newhand31/shop-web` 1 號已併（merge commit `0b16268`，作者 2026-11-25 說由指揮窗併），兩輪修正後 head 含 `42a5942`、`13549ed`（repo 是私人的）。指揮窗從全新 clone 跑安裝、`pnpm verify`、`pnpm record ch05` 都 exit 0，跑前跑後 `go-shop` 的 worktree 清單完全相同。全新 checker 第 3 輪：通過，0 個高、1 個中、3 個低。剩下的中等問題：兩個啟動器同時跑時，後到的失敗後會清掉先到的暫時 worktree（只傷啟動器自己的暫存）。第 5 章的事故補丁查過是真的改後端，沒有造假。第 6 章超賣的錄影還沒做，留到 P0b 做到那一章時補。產線插入錄影片段的部分等 P0a 的分支併進產線 `main` 再做 |
 
 - P0e1 的驗收指令：`pnpm verify`（typecheck、lint、build、E2E 對 `go-shop` 的 `main`）exit 0；`pnpm record ch05` 產出事故發生與事故不再發生兩段錄影。
 - P0a 的驗收指令：產線分支上 `npm run verify` exit 0；`go-shop` 的 PR 只動 `docs/plain-style-guide.md` 且 `go run ./cmd/claimcheck -strict` 通過。
