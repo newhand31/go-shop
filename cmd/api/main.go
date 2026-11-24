@@ -12,15 +12,18 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 
 	"github.com/newhand31/go-shop/internal/handler"
 	"github.com/newhand31/go-shop/internal/payment/ecpay"
 	"github.com/newhand31/go-shop/internal/platform/lifecycle"
+	"github.com/newhand31/go-shop/internal/platform/mail"
 	"github.com/newhand31/go-shop/internal/platform/postgres"
 	"github.com/newhand31/go-shop/internal/platform/ratelimit"
 	"github.com/newhand31/go-shop/internal/platform/redis"
@@ -58,6 +61,9 @@ var (
 	_ service.CallbackVerifier = (*ecpay.Verifier)(nil)
 	_ service.OutboxStore      = (*repository.Outbox)(nil)
 	_ service.Mailer           = logMailer{}
+	_ service.Mailer           = (*mail.SMTP)(nil)
+	_ service.OrderLookup      = (*repository.OrderReader)(nil)
+	_ service.CheckoutSigner   = (*ecpay.Verifier)(nil)
 	_ service.ExpiryStore      = (*repository.Expiry)(nil)
 	_ service.StockGate        = (*repository.Reservations)(nil)
 )
@@ -69,6 +75,29 @@ type logMailer struct{ logger *slog.Logger }
 func (m logMailer) SendOrderConfirmation(_ context.Context, orderID, totalTWD int) error {
 	m.logger.Info("would send order confirmation", "order_id", orderID, "total_twd", totalTWD)
 	return nil
+}
+
+// mailer picks the confirmation-email sender: real SMTP when SMTP_HOST is set, otherwise the logger above.
+// SMTP_PORT defaults to 25; SMTP_FROM and SMTP_TO are the sender and the one recipient (there are no customer addresses yet).
+func mailer(logger *slog.Logger) service.Mailer {
+	host := os.Getenv("SMTP_HOST")
+	if host == "" {
+		return logMailer{logger}
+	}
+	port := os.Getenv("SMTP_PORT")
+	if port == "" {
+		port = "25"
+	}
+	logger.Info("order confirmations go out by SMTP", "host", host, "port", port)
+	return mail.NewSMTP(mail.Config{Host: host, Port: port, From: os.Getenv("SMTP_FROM"), To: os.Getenv("SMTP_TO")})
+}
+
+// orderAPI is the three service pieces the order routes need, glued into the one interface the handler asks for.
+// Embedding promotes their methods (Checkout, Get, StartPayment), so there is no forwarding code.
+type orderAPI struct {
+	*service.OrderService
+	*service.OrderReadService
+	*service.PaymentStarter
 }
 
 // ecpayVerifier reads the merchant's secrets from the environment and fails closed: with no secrets the API refuses to
@@ -84,6 +113,22 @@ func ecpayVerifier(logger *slog.Logger) (*ecpay.Verifier, error) {
 		return ecpay.NewVerifier(ecpay.SandboxMerchantID, ecpay.SandboxHashKey, ecpay.SandboxHashIV), nil
 	}
 	return nil, errors.New("set ECPAY_MERCHANT_ID, ECPAY_HASH_KEY and ECPAY_HASH_IV (or ECPAY_SANDBOX=1 for the public test credentials)")
+}
+
+// installPropagator makes the API continue the caller's trace. Without a propagator the traceparent header of an
+// incoming request is ignored and every request starts a new trace. It must run before otelhttp.NewHandler, which reads
+// the global propagator when it is built.
+func installPropagator() {
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+}
+
+// publicBaseURL is the address ECPay's server uses to reach this API. Locally it is the loopback address, which ECPay
+// cannot reach: fine for looking at the form, not for receiving the callback.
+func publicBaseURL(port string) string {
+	if u := strings.TrimRight(os.Getenv("PUBLIC_BASE_URL"), "/"); u != "" {
+		return u
+	}
+	return "http://localhost:" + port
 }
 
 func main() {
@@ -109,6 +154,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	otel.SetTracerProvider(tp)
+	installPropagator()
 	defer func() {
 		flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -155,17 +201,23 @@ func run(logger *slog.Logger) error {
 	limiter := ratelimit.New(float64(envInt("RATE_LIMIT_RPS", defaultRateLimitPerSecond)), envInt("RATE_LIMIT_BURST", defaultRateLimitBurst))
 	sessions := session.NewRedis(rdb, sessionTTL) // was session.NewMemory in episode 4: the handler cannot tell
 	carts := service.NewCartService(repository.NewCarts(rdb), svc)
-	orders := service.NewOrderService(repository.NewOrders(pool), repository.NewCarts(rdb), logger)
+	verifier, err := ecpayVerifier(logger)
+	if err != nil {
+		return err
+	}
+	orderReader := repository.NewOrderReader(pool)
+	orders := orderAPI{
+		service.NewOrderService(repository.NewOrders(pool), repository.NewCarts(rdb), logger),
+		service.NewOrderReadService(orderReader),
+		// ECPay's server posts the result to PUBLIC_BASE_URL + the callback path, so the base must be reachable from the internet.
+		service.NewPaymentStarter(orderReader, verifier, publicBaseURL(port)+handler.ECPayCallbackPath),
+	}
 	h := handler.New(svc, carts, orders, logger,
 		handler.Instrument(metrics), // before the limiter, so a 429 is counted too
 		handler.RateLimit(limiter, logger),
 		handler.Session(sessions, sessionTTL, logger),
 	)
 
-	verifier, err := ecpayVerifier(logger)
-	if err != nil {
-		return err
-	}
 	payments := service.NewPaymentService(verifier, repository.NewPayments(pool), logger)
 
 	// Background goroutines live in one group with its own context, not ctx: a signal must not stop them while requests
@@ -174,9 +226,12 @@ func run(logger *slog.Logger) error {
 	workers := lifecycle.NewGroup()
 	defer workers.Stop()
 
-	dispatcher := service.NewOutboxDispatcher(repository.NewOutbox(pool), logMailer{logger}, service.OutboxConfig{}, logger)
+	dispatcher := service.NewOutboxDispatcher(repository.NewOutbox(pool), mailer(logger), service.OutboxConfig{}, logger)
 	workers.Go(dispatcher.Run)
-	janitor := service.NewExpiryJanitor(repository.NewExpiry(pool), service.ExpiryConfig{}, logger)
+	janitor := service.NewExpiryJanitor(repository.NewExpiry(pool), service.ExpiryConfig{
+		OrderTTL: time.Duration(envInt("ORDER_TTL_SECONDS", 0)) * time.Second,
+		Interval: time.Duration(envInt("EXPIRY_SWEEP_SECONDS", 0)) * time.Second,
+	}, logger) // zero means "use the default": 15 minutes and 1 minute
 	workers.Go(janitor.Run)
 
 	// Flash sale: switched on by FLASH_SALE_PRODUCT_ID and FLASH_SALE_STOCK. Off by default, the route does not exist.

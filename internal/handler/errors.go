@@ -39,6 +39,10 @@ func writeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, err
 	switch {
 	case errors.Is(err, service.ErrProductNotFound):
 		status, body = http.StatusNotFound, api.Error{Code: "product_not_found", Message: "product not found"}
+	case errors.Is(err, service.ErrOrderNotFound):
+		status, body = http.StatusNotFound, api.Error{Code: "order_not_found", Message: "order not found"}
+	case errors.Is(err, service.ErrOrderNotPayable):
+		status, body = http.StatusConflict, api.Error{Code: "order_not_payable", Message: "order is already paid or has expired"}
 	case errors.Is(err, service.ErrOutOfStock):
 		status, body = http.StatusConflict, api.Error{Code: "out_of_stock", Message: "not enough stock"}
 	case errors.Is(err, service.ErrBusy):

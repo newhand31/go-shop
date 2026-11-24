@@ -19,3 +19,11 @@ SELECT product_id, quantity FROM order_lines WHERE order_id = $1 ORDER BY produc
 
 -- name: MarkOrderExpired :exec
 UPDATE orders SET expired_at = now() WHERE id = $1;
+
+-- name: GetOrder :one
+-- The order row with the two timestamps that decide its status: paid_at, expired_at.
+SELECT id, total_twd, paid_at, expired_at FROM orders WHERE id = $1;
+
+-- name: ListOrderLinesWithPrice :many
+-- Every line of one order, as it was priced when the order was placed.
+SELECT product_id, quantity, unit_price_twd FROM order_lines WHERE order_id = $1 ORDER BY product_id;

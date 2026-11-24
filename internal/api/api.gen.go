@@ -11,6 +11,42 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for OrderDetailStatus.
+const (
+	Expired OrderDetailStatus = "expired"
+	Paid    OrderDetailStatus = "paid"
+	Unpaid  OrderDetailStatus = "unpaid"
+)
+
+// Valid indicates whether the value is a known member of the OrderDetailStatus enum.
+func (e OrderDetailStatus) Valid() bool {
+	switch e {
+	case Expired:
+		return true
+	case Paid:
+		return true
+	case Unpaid:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PaymentFormMethod.
+const (
+	POST PaymentFormMethod = "POST"
+)
+
+// Valid indicates whether the value is a known member of the PaymentFormMethod enum.
+func (e PaymentFormMethod) Valid() bool {
+	switch e {
+	case POST:
+		return true
+	default:
+		return false
+	}
+}
+
 // Cart defines model for Cart.
 type Cart struct {
 	Items    []CartItem `json:"items"`
@@ -51,12 +87,39 @@ type Order struct {
 	TotalTwd int         `json:"total_twd"`
 }
 
+// OrderDetail defines model for OrderDetail.
+type OrderDetail struct {
+	Id    int         `json:"id"`
+	Lines []OrderLine `json:"lines"`
+
+	// Status unpaid holds its stock until paid or expired; expired gave its stock back.
+	Status   OrderDetailStatus `json:"status"`
+	TotalTwd int               `json:"total_twd"`
+}
+
+// OrderDetailStatus unpaid holds its stock until paid or expired; expired gave its stock back.
+type OrderDetailStatus string
+
 // OrderLine defines model for OrderLine.
 type OrderLine struct {
 	ProductId    int `json:"product_id"`
 	Quantity     int `json:"quantity"`
 	UnitPriceTwd int `json:"unit_price_twd"`
 }
+
+// PaymentForm defines model for PaymentForm.
+type PaymentForm struct {
+	// ActionUrl ECPay's checkout address. Submit the form there.
+	ActionUrl string `json:"action_url"`
+
+	// Fields Every field of the form, already signed (CheckMacValue). Send them unchanged.
+	Fields  map[string]string `json:"fields"`
+	Method  PaymentFormMethod `json:"method"`
+	OrderId int               `json:"order_id"`
+}
+
+// PaymentFormMethod defines model for PaymentForm.Method.
+type PaymentFormMethod string
 
 // Product defines model for Product.
 type Product struct {
@@ -82,6 +145,12 @@ type ServerInterface interface {
 	// Checkout Buy everything in the cart. Stock is checked and taken in one transaction, so it cannot be oversold.
 	// (POST /checkout)
 	Checkout(w http.ResponseWriter, r *http.Request)
+	// GetOrder Read one order with its status (unpaid, paid or expired)
+	// (GET /orders/{orderId})
+	GetOrder(w http.ResponseWriter, r *http.Request, orderId int)
+	// StartPayment Start paying an order with ECPay. Answers the signed form the browser must POST to ECPay.
+	// (POST /orders/{orderId}/payment)
+	StartPayment(w http.ResponseWriter, r *http.Request, orderId int)
 	// ListProducts List all products
 	// (GET /products)
 	ListProducts(w http.ResponseWriter, r *http.Request)
@@ -115,6 +184,18 @@ func (_ Unimplemented) PutCartItem(w http.ResponseWriter, r *http.Request, produ
 // Checkout Buy everything in the cart. Stock is checked and taken in one transaction, so it cannot be oversold.
 // (POST /checkout)
 func (_ Unimplemented) Checkout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// GetOrder Read one order with its status (unpaid, paid or expired)
+// (GET /orders/{orderId})
+func (_ Unimplemented) GetOrder(w http.ResponseWriter, r *http.Request, orderId int) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// StartPayment Start paying an order with ECPay. Answers the signed form the browser must POST to ECPay.
+// (POST /orders/{orderId}/payment)
+func (_ Unimplemented) StartPayment(w http.ResponseWriter, r *http.Request, orderId int) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -210,6 +291,58 @@ func (siw *ServerInterfaceWrapper) Checkout(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Checkout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrder operation middleware
+func (siw *ServerInterfaceWrapper) GetOrder(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orderId" -------------
+	var orderId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orderId", chi.URLParam(r, "orderId"), &orderId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orderId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrder(w, r, orderId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartPayment operation middleware
+func (siw *ServerInterfaceWrapper) StartPayment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "orderId" -------------
+	var orderId int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "orderId", chi.URLParam(r, "orderId"), &orderId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "orderId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartPayment(w, r, orderId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -389,6 +522,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/checkout", wrapper.Checkout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/orders/{orderId}", wrapper.GetOrder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/orders/{orderId}/payment", wrapper.StartPayment)
 	})
 
 	return r

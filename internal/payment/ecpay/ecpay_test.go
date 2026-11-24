@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/newhand31/go-shop/internal/payment/ecpay"
 )
@@ -128,7 +129,18 @@ func TestOrderRef(t *testing.T) {
 	if err != nil || id != 42 {
 		t.Fatalf("round trip = %d, %v", id, err)
 	}
-	for _, bad := range []string{"", "42", "GS", "GSabc", "GS-1", "GS0", "XX42"} {
+	at := time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)
+	ref := ecpay.AttemptRef(42, at)
+	if len(ref) > 20 {
+		t.Errorf("AttemptRef %q is %d characters, ECPay allows 20", ref, len(ref))
+	}
+	if id, err := ecpay.ParseOrderRef(ref); err != nil || id != 42 {
+		t.Errorf("attempt ref %q round trip = %d, %v", ref, id, err)
+	}
+	if ecpay.AttemptRef(42, at) == ecpay.AttemptRef(42, at.Add(time.Millisecond)) {
+		t.Error("two attempts at different times got the same MerchantTradeNo")
+	}
+	for _, bad := range []string{"", "42", "GS", "GSabc", "GS-1", "GS0", "XX42", "GS42T", "GS42TABC", "GS42T-1", "GST1a"} {
 		if _, err := ecpay.ParseOrderRef(bad); !errors.Is(err, ecpay.ErrMalformed) {
 			t.Errorf("ParseOrderRef(%q) error = %v, want ErrMalformed", bad, err)
 		}
@@ -152,3 +164,42 @@ func with(k, v string) url.Values {
 }
 
 func withMerchant(id string) url.Values { return with("MerchantID", id) }
+
+func TestCheckoutURLFollowsMerchant(t *testing.T) {
+	tests := []struct {
+		name     string
+		verifier *ecpay.Verifier
+		want     string
+	}{
+		{"sandbox merchant goes to the sandbox", ecpay.NewVerifier(ecpay.SandboxMerchantID, "k", "i"), "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"},
+		{"any other merchant goes to production", ecpay.NewVerifier("1234567", "k", "i"), "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.verifier.CheckoutURL(); got != tt.want {
+				t.Errorf("CheckoutURL = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// What the shop signs when it sends a payer to ECPay must verify with the same rule ECPay uses on callbacks.
+func TestCheckoutFieldsAreSigned(t *testing.T) {
+	v := ecpay.NewVerifier(ecpay.SandboxMerchantID, ecpay.SandboxHashKey, ecpay.SandboxHashIV)
+	now := time.Date(2026, 1, 2, 23, 30, 0, 0, time.UTC)
+	f := v.CheckoutFields(ecpay.CheckoutRequest{OrderID: 5, AmountTWD: 300, ItemName: "go-shop order 5", Description: "go-shop",
+		ReturnURL: "https://shop.example/payments/ecpay/callback", Now: now})
+	if got := f.Get("MerchantTradeDate"); got != "2026/01/03 07:30:00" {
+		t.Errorf("MerchantTradeDate = %q, want Taipei time 2026/01/03 07:30:00", got)
+	}
+	if f.Get("MerchantTradeNo") != ecpay.AttemptRef(5, now) || f.Get("TotalAmount") != "300" || f.Get("EncryptType") != "1" {
+		t.Errorf("fields = %v", f)
+	}
+	if got, want := f.Get(ecpay.CheckMacField), v.CheckMacValue(f); got != want {
+		t.Errorf("CheckMacValue = %q, want %q", got, want)
+	}
+	f.Set("TotalAmount", "1") // tamper
+	if f.Get(ecpay.CheckMacField) == v.CheckMacValue(f) {
+		t.Error("changing an amount must change the signature")
+	}
+}

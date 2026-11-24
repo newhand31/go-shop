@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: go-shop API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     Contract-first: this file is the single source of truth for the HTTP API.
     Run `make api` to regenerate internal/api/api.gen.go.
@@ -116,6 +116,67 @@ paths:
                 $ref: "#/components/schemas/Error"
         default:
           $ref: "#/components/responses/Error"
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Read one order with its status (unpaid, paid or expired)
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+        "404":
+          description: There is no such order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/Error"
+  /orders/{orderId}/payment:
+    post:
+      operationId: startPayment
+      summary: Start paying an order with ECPay. Answers the signed form the browser must POST to ECPay.
+      description: |
+        Calling it again for the same unpaid order gives a new form for the same order and amount, so a visitor who closed
+        the ECPay tab can come back. Only `MerchantTradeNo` (a new number per attempt, because ECPay does not accept a
+        number twice), `MerchantTradeDate` and the signature change. Whichever attempt the visitor pays, the callback
+        marks this order paid. A started payment is not recorded: nothing changes until ECPay calls back. An order that is paid or expired cannot be paid: 409 `order_not_payable`.
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The form to submit to ECPay
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentForm"
+        "404":
+          description: There is no such order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The order is already paid or has expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        default:
+          $ref: "#/components/responses/Error"
 components:
   responses:
     Error:
@@ -185,6 +246,39 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OrderLine"
+    OrderDetail:
+      type: object
+      required: [id, total_twd, status, lines]
+      properties:
+        id:
+          type: integer
+        total_twd:
+          type: integer
+        status:
+          type: string
+          enum: [unpaid, paid, expired]
+          description: unpaid holds its stock until paid or expired; expired gave its stock back.
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+    PaymentForm:
+      type: object
+      required: [order_id, action_url, method, fields]
+      properties:
+        order_id:
+          type: integer
+        action_url:
+          type: string
+          description: ECPay's checkout address. Submit the form there.
+        method:
+          type: string
+          enum: [POST]
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+          description: Every field of the form, already signed (CheckMacValue). Send them unchanged.
     Error:
       type: object
       required: [code, message]
