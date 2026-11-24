@@ -108,7 +108,7 @@
 
 | id | 執行者 | 分支／工作鍵 | 證據 |
 |---|---|---|---|
-| P0a | `agent:worker`（2026-11-24 派出） | 產線：`local/go-shop-video:feat/bilingual-pipeline`（該 repo 沒有 remote，只在本機）；口播規範：`newhand31/go-shop:feat/english-narration-guide` | 驗收中。產線 commit `25d453a`、`4c3fa2c`，指揮窗自己跑 `npm run verify` exit 0；口播規範是 PR 26（head `40ea2b5`，只動 `docs/plain-style-guide.md`）。全新 checker 第 1 輪審查中 |
+| P0a | `agent:worker`（2026-11-24 派出） | 產線：`local/go-shop-video:feat/bilingual-pipeline`（該 repo 沒有 remote，只在本機）；口播規範：`newhand31/go-shop:feat/english-narration-guide` | 修正第 1 輪（`fixing(1)`）。產線 commit `25d453a`、`4c3fa2c`，指揮窗自己跑 `npm run verify` exit 0；口播規範是 PR 26（head `40ea2b5`，只動 `docs/plain-style-guide.md`），checker 判這一部分過關。全新 checker 第 1 輪：產線不通過，2 個高、2 個中、5 個低：念錯檢查太寬（`C sharp` 念錯也不會列出）；`npm run verify` 會假綠（沒開嚴格模式；whisper 回 0 個字時退回假時間仍 exit 0）。另有舊的字串分鏡不能配音、合併 SRT 沒查重疊 |
 | P0c | `agent:worker`（2026-11-24 派出） | `newhand31/shop-contract:feat/contract-l1-l11` | 驗收過，等合併。PR `newhand31/shop-contract` 1 號（head `f9fb77c`，8 個 commit 都在遠端分支，56 檔，沒有本機路徑；repo 是私人的）。指揮窗自己跑全跑指令：結束碼 2，L1–L6、L9、L11 `PASS`，L7、L8、L10 `BLOCKED`，沒有 `FAIL`。全新 checker 第 1 輪：通過，0 個高、4 個中、8 個低。被擋的三級與 4 個中等問題併進 P0d |
 | P0e1 | `agent:worker`（2026-11-24 派出） | `newhand31/shop-web:feat/storefront-first-three` | 修正第 1 輪（`fixing(1)`）。PR `newhand31/shop-web` 1 號（head `06f62a1`，5 個 commit 都在遠端分支，53 檔，沒有本機路徑；repo 是私人的）。指揮窗自己跑 `pnpm verify` 與 `pnpm record ch05` 都 exit 0，但那是因為本機留著一個沒進版控的檔。全新 checker 第 1 輪：不通過，3 個高、6 個中、6 個低：錄影劇本 `scripts/recordings/ch05.mjs` 被 `.gitignore` 擋掉、沒進分支；後端啟動失敗時不清理；殘留的暫時 worktree 會被直接沿用。第 5 章的事故補丁查過是真的改後端，沒有造假。第 6 章超賣的錄影還沒做，留到 P0b 做到那一章時補。這一片只做 `shop-web`；產線插入錄影片段的部分等 P0a 的分支併進產線 `main` 再做 |
 
