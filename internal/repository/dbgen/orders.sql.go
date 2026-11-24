@@ -28,6 +28,30 @@ func (q *Queries) ClaimExpiredOrder(ctx context.Context, createdAt pgtype.Timest
 	return id, err
 }
 
+const getOrder = `-- name: GetOrder :one
+SELECT id, total_twd, paid_at, expired_at FROM orders WHERE id = $1
+`
+
+type GetOrderRow struct {
+	ID        int64
+	TotalTwd  int32
+	PaidAt    pgtype.Timestamptz
+	ExpiredAt pgtype.Timestamptz
+}
+
+// The order row with the two timestamps that decide its status: paid_at, expired_at.
+func (q *Queries) GetOrder(ctx context.Context, id int64) (GetOrderRow, error) {
+	row := q.db.QueryRow(ctx, getOrder, id)
+	var i GetOrderRow
+	err := row.Scan(
+		&i.ID,
+		&i.TotalTwd,
+		&i.PaidAt,
+		&i.ExpiredAt,
+	)
+	return i, err
+}
+
 const insertOrder = `-- name: InsertOrder :one
 INSERT INTO orders (total_twd) VALUES ($1) RETURNING id
 `
@@ -80,6 +104,37 @@ func (q *Queries) ListOrderLines(ctx context.Context, orderID int64) ([]ListOrde
 	for rows.Next() {
 		var i ListOrderLinesRow
 		if err := rows.Scan(&i.ProductID, &i.Quantity); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrderLinesWithPrice = `-- name: ListOrderLinesWithPrice :many
+SELECT product_id, quantity, unit_price_twd FROM order_lines WHERE order_id = $1 ORDER BY product_id
+`
+
+type ListOrderLinesWithPriceRow struct {
+	ProductID    int32
+	Quantity     int32
+	UnitPriceTwd int32
+}
+
+// Every line of one order, as it was priced when the order was placed.
+func (q *Queries) ListOrderLinesWithPrice(ctx context.Context, orderID int64) ([]ListOrderLinesWithPriceRow, error) {
+	rows, err := q.db.Query(ctx, listOrderLinesWithPrice, orderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrderLinesWithPriceRow
+	for rows.Next() {
+		var i ListOrderLinesWithPriceRow
+		if err := rows.Scan(&i.ProductID, &i.Quantity, &i.UnitPriceTwd); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

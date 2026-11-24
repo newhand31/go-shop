@@ -21,3 +21,6 @@
 | 11 | **半夜查不到原因**：只知道「有時候很慢」 | OpenTelemetry trace、Prometheus metrics、trace id 串 slog | ＊對照 Application Insights／Micrometer，差在要自己接線 |
 | 12 | **部署斷線**：每次部署都有請求被砍掉 | graceful shutdown、多階段 Dockerfile、scratch image | ＊對照 `IHostApplicationLifetime`；單一靜態二進位不需要 runtime |
 | 番外 | **踩坑合集** | nil interface 不等於 nil、迴圈變數捕捉（Go 1.22 前後）、slice 共用底層陣列 | ＊各自對照 C# 的 null、closure 捕捉、`List<T>` 複製語意 |
+| 14 | **前端沒地方付錢**：訂單成立了，前端卻不能開始付款、也查不到訂單付了沒 | 開始付款與查訂單兩支 API（綠界訂單表單自己簽章）、struct 嵌入（`embedding`）把三個 service 接成一個 handler 介面 | ＊嵌入像組合而非繼承：方法被「提升」，不是 `base`／`super` |
+
+第 14 集同時補上前面幾集留下的三個設定缺口，讓多語言系列的契約測試能跑：確認信改走 SMTP（`SMTP_HOST`、`SMTP_PORT`）、訂單逾期時間與清掃間隔可調（`ORDER_TTL_SECONDS`、`EXPIRY_SWEEP_SECONDS`）、接受進來的 `traceparent`（`propagation.TraceContext{}`）。併進 `main` 後打 tag `ep14-pay-and-orders`。

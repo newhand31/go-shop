@@ -174,3 +174,11 @@ type noOrders struct{}
 func (noOrders) Checkout(context.Context, string) (service.Order, error) {
 	return service.Order{}, nil
 }
+
+func (noOrders) Get(context.Context, int) (service.OrderDetail, error) {
+	return service.OrderDetail{}, nil
+}
+
+func (noOrders) StartPayment(context.Context, int) (service.PaymentForm, error) {
+	return service.PaymentForm{}, nil
+}

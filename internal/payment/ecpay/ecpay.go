@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Sandbox credentials from ECPay's public developer documentation. They are meant for testing and are safe to publish;
@@ -124,8 +125,8 @@ func (v *Verifier) Verify(params url.Values) (Callback, error) {
 	return cb, nil
 }
 
-// Sign returns a copy of params with CheckMacValue filled in. The shop never sends a payment callback itself;
-// tests and the sandbox helper use this to play ECPay's part.
+// Sign returns a copy of params with CheckMacValue filled in. The shop signs its checkout form with it (CheckoutFields);
+// tests also use it to play ECPay's part and sign a callback.
 func (v *Verifier) Sign(params url.Values) url.Values {
 	out := url.Values{}
 	for k, vals := range params {
@@ -149,4 +150,49 @@ func ParseOrderRef(ref string) (int, error) {
 		return 0, fmt.Errorf("%w: unknown MerchantTradeNo %q", ErrMalformed, ref)
 	}
 	return id, nil
+}
+
+// Where ECPay's checkout page lives. The sandbox accepts only the public sandbox merchant; real money goes to the other.
+const (
+	sandboxCheckoutURL    = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"
+	productionCheckoutURL = "https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5"
+)
+
+// CheckoutURL is the address the browser posts the checkout form to. The sandbox merchant id picks the sandbox page,
+// so test credentials can never reach the real one.
+func (v *Verifier) CheckoutURL() string {
+	if v.merchantID == SandboxMerchantID {
+		return sandboxCheckoutURL
+	}
+	return productionCheckoutURL
+}
+
+// CheckoutRequest is what the shop tells ECPay about one payment.
+type CheckoutRequest struct {
+	OrderID     int
+	AmountTWD   int
+	ItemName    string
+	Description string
+	ReturnURL   string    // where ECPay's server posts the result: our callback route
+	Now         time.Time // becomes MerchantTradeDate
+}
+
+// taipei is ECPay's clock: MerchantTradeDate is in Taiwan time.
+var taipei = time.FixedZone("CST", 8*60*60)
+
+// CheckoutFields builds the signed form fields of ECPay's all-in-one checkout (EncryptType 1, SHA-256).
+// It is the mirror image of Verify: the same CheckMacValue recipe, but here the shop signs and ECPay checks.
+func (v *Verifier) CheckoutFields(r CheckoutRequest) url.Values {
+	f := url.Values{}
+	f.Set("MerchantID", v.merchantID)
+	f.Set("MerchantTradeNo", OrderRef(r.OrderID))
+	f.Set("MerchantTradeDate", r.Now.In(taipei).Format("2006/01/02 15:04:05"))
+	f.Set("PaymentType", "aio")
+	f.Set("TotalAmount", strconv.Itoa(r.AmountTWD))
+	f.Set("TradeDesc", r.Description)
+	f.Set("ItemName", r.ItemName)
+	f.Set("ReturnURL", r.ReturnURL)
+	f.Set("ChoosePayment", "ALL")
+	f.Set("EncryptType", "1")
+	return v.Sign(f)
 }
