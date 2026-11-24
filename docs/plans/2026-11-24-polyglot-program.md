@@ -141,8 +141,8 @@
 - 先行章：無
 - 執行者：`session:local_291204f3-5fc5-4dea-9029-a4b5f237722c`（2026-11-25 派出，sonnet）；分支／工作鍵 `newhand31/go-shop:feat/p0d-pay-and-orders`、`newhand31/shop-contract:feat/p0d-gates`
 - 點頭：2026-11-24
-- 狀態：running
-- 證據：進行中。還沒有可驗的產出
+- 狀態：fixing(1)
+- 證據：修正第 1 輪進行中。PR newhand31/go-shop#32（head `44a274b`）、newhand31/shop-contract#2（head `5d80998`）都開著、未併。指揮窗 2026-11-25 第 1 輪驗收：兩個 head 都在 origin；改動都在檔案清單內；既有 tag 的 sha 沒變；全新 clone 上 `go build`、`go vet`、`go test`、`claimcheck -strict` 結束碼 0（148 條過）；契約全跑對 P0d 分支結束碼 0，L1–L11 全 `PASS`。全新 checker 第 1 輪：不過，0 個高、3 個中、9 個低。三個中等問題：L6「開始付款兩次」比對簽章，跨秒時正確的後端也會紅；L6「只開始付款不會入帳」的檢查永遠不會失敗；每張付款表單用同一個交易編號，綠界可能拒絕第二次付款（未證實，要查官方文件）。已請執行窗修
 
 ### P0e1 示範店面前三段
 
