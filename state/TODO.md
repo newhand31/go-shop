@@ -4,8 +4,20 @@
   - 目標：平實口播版可以公開發佈：配音合法、事故情境有重現、英文版有著落。
   - 現況：主張已有 CI 守著。`.github/workflows/claims.yml` 在每次 push 跑 `go run ./cmd/claimcheck -strict`，runner 上 148 passed、0 failed、0 skipped。
   - 現況：13 章口播都不唸行號，逐字稿與章節時間戳已更新。README（中英）有查證說明。C1-1 用 `{root}` 指第一個 commit，不寫死編號。
-  - 現況：還沒做的有三項，都要使用者決定。一，配音是暫時的 TTS，公開前要換真人錄音或正式授權的 TTS。二，第 4、7、8、10 章的事故情境沒有測試或壓測重現（規範第 2 節）。三，英文版還沒寫（規範第 6 節）。
+  - 現況：三項裡有兩項在 2026-11-24 定案（見 `state/DECISIONS.md`）。一，配音改用本地 Kokoro-82M（Apache-2.0）、聲音 `af_heart`；產線還沒接上，排在計畫的 P0a。三，英文版要做，而且英文優先；排在計畫的 P0b。計畫檔是 `docs/plans/2026-11-24-polyglot-program.md`。
+  - 現況：還要使用者決定的剩一項。二，第 4、7、8、10 章的事故情境沒有測試或壓測重現（規範第 2 節）。
   - 現況：影片產線 repo 的分鏡改動在它的 `feat/plain-followups` 分支，還沒併進它的 main。
   - 檔案：`docs/plain-style-guide.md`、`docs/claims/`、`docs/transcripts/`；影片產線 repo 的 `episodes/`、`recordings/`。
-  - 完成的樣子：配音來源有書面授權或是真人錄音；四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求；英文版做或不做有一條決策紀錄。
+  - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
+
+- [ ] **開多語言計畫的指揮窗，從 P0a 與 P0c 開始排程**（交接自「go-shop#24｜寫英文優先決策與多語言總計畫｜進行中」）
+  - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 自動推進全部分片。作者只在三個時點介入：每個系列的先行章、機器修三輪不過、公開發佈。
+  - 現況：計畫與三條決策已併進 main（PR 24）。形式都定了：英文優先、Kokoro `af_heart`、一個系列一支分章節的長片加 Short 推廣、每章 8–10 分鐘、對照以 C# 為主。所有分片都是 `todo`，還沒有指揮窗。
+  - 現況：先開 P0a（產線雙語化，repo `go-shop-video`）與 P0c（建 `shop-contract`，先建成私人 repo），同時最多兩條線。
+  - 現況：`go-shop-video` 有一個不是這條線建的未追蹤資料夾 `episodes/measure01/`，動產線前先查有沒有別的窗在做。它的 `feat/plain-followups` 分支還沒併進它的 main。
+  - 現況：Kokoro 試作的做法：`kokoro-onnx`（不需 PyTorch）、模型 `kokoro-v1.0.onnx` 與 `voices-v1.0.bin`、`faster-whisper` 的 `small.en` 取字級時間點。`C#` 要念成 `C sharp`、`ep05` 要念成 `ep-05`。試作環境在暫存資料夾，P0a 要重建在 repo 裡。
+  - 現況：畫面與縮圖的風格沒有查證（逐字稿看不出來），P0a 做到畫面時再查。
+  - 檔案：`docs/plans/2026-11-24-polyglot-program.md`、`state/decisions/2026-11-24-*.md`、`docs/plain-style-guide.md`；影片產線 repo 的 `episodes/`、`src/subtitles.ts`。
+  - 完成的樣子：計畫檔標頭填上指揮窗；P0a 與 P0c 的狀態是 `doing` 或之後的值，各有一支開著或已併的 PR。
+  - 工作鍵：newhand31/go-shop:polyglot-program
