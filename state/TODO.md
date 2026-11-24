@@ -11,7 +11,7 @@
   - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
 
-- [ ] **接手多語言計畫指揮窗，先派 P0e2 並驗 P0d 執行窗收尾**（交接自「go-shop#32｜指揮多語言計畫 P0d 第 2 輪驗收｜進行中」）
+- [x] **接手多語言計畫指揮窗，先派 P0e2 並驗 P0d 執行窗收尾**（交接自「go-shop#32｜指揮多語言計畫 P0d 第 2 輪驗收｜進行中」）
   - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
   - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。每片的狀態、執行窗的 id 與工作鍵、證據都在各片那一節。標頭的「指揮台」要改成新窗。
   - 現況：P0a、P0c、P0d、P0e1 是 `accepted`。P0d 的兩支 PR 已併，tag `ep14-pay-and-orders` 已打。已請 P0d 執行窗收尾並 release 它的兩個認領，新窗用 `coord.ps1 show` 驗它的收尾記錄。

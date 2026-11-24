@@ -1,6 +1,6 @@
 # 多語言計畫：同一份契約，多個後端與前端系列（英文優先）
 
-- 指揮台：第三個指揮窗（2026-11-25 接手，由規劃窗 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0` 開出）。前兩個指揮窗 `local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。工作鍵 `newhand31/go-shop:polyglot-program`
+- 指揮台：第四個指揮窗 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`（2026-11-25 接手）。前三個指揮窗 `local_9ef31a99-8861-49a4-aa06-35dde6b89f39`、`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。規劃窗是 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0`。工作鍵 `newhand31/go-shop:polyglot-program`
 - 決策（示範店面與全端旗艦片）：見 `state/DECISIONS.md` 2026-11-24「前後端同片」那一條
 - 決策：`state/decisions/2026-11-24-204538-5d23bfb0.md`（英文優先與配音）、`state/decisions/2026-11-24-204539-f51a378a.md`（多語言計畫）
 - 使用者點頭：2026-11-24 同意全部排程、自動推進、每系列先行章把關。2026-11-25 同意把各片的點頭欄填成 2026-11-24，P7 除外（動工前先問作者）
@@ -165,14 +165,14 @@
 - 目標：示範店面後兩段：付款與查訂單，補上對應事故的 Playwright 腳本。同一片修 P0e1 留下的中等問題：啟動器拿不到鎖時，收尾不能清掉另一個啟動器的暫時 worktree
 - repo：shop-web
 - 檔案：`shop-web` 整個 repo
-- 驗收指令：`pnpm verify` exit 0；付款與查訂單事故的 `pnpm record` 各產出兩段錄影（章號派工前補）
+- 驗收指令：全新 clone 上 `pnpm install --frozen-lockfile && pnpm verify` exit 0（E2E 對 `go-shop` 的 `main`，涵蓋付款成功與查訂單三種狀態）；`pnpm test:scripts` exit 0，含啟動器鎖的新測試；`pnpm record ch14`（前端沒地方付錢）與 `pnpm record ch09`（庫存被佔）各 exit 0、各產出事故與修好兩段錄影；`pnpm record ch05` 仍然 exit 0。
 - 完成的樣子：店面能走完付款與查訂單，對應事故各有一支錄影腳本；啟動器的鎖問題修掉。
 - 依賴：P0e1,P0d
 - 先行章：無
-- 執行者：未派
+- 執行者：`session:local_6a2b2027-1ed9-40b2-9515-ea2543750e80`（2026-11-25 派出，sonnet）；分支／工作鍵 `newhand31/shop-web:feat/p0e2-pay-and-orders`
 - 點頭：2026-11-24
-- 狀態：planned
-- 證據：還沒開始
+- 狀態：running
+- 證據：進行中。2026-11-25 第四個指揮窗派出。章號由指揮窗定：第 14 章（付款與查訂單頁面本身；事故段用 tag `ep13-pitfalls` 的後端）與第 9 章（逾期訂單釋放庫存，靠查訂單頁看得到）是必做。第 7 章「付兩次錢」的差別只在入帳紀錄，查訂單 API 只回狀態，店面上可能看不出來；執行窗先評估，看得到才錄，看不到就在 PR 說明原因，不造假。付款不送到綠界的網站，E2E 與錄影改由腳本送簽章正確的回呼。執行窗開在 repo 上層資料夾（app 不讓指揮窗在自動接續的回合把子對話開到別的資料夾），它自己在短路徑開 `shop-web` 的 worktree 做。P0d 執行窗的收尾已用 coord 實查：兩個認領都是 `closed`（原因 `merged`），收尾記錄 `none`
 
 ### P1 C# 系列
 
