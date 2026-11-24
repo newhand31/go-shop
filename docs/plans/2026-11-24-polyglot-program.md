@@ -1,6 +1,6 @@
 # 多語言計畫：同一份契約，多個後端與前端系列（英文優先）
 
-- 指揮台：`local_2e9951ea-e36b-4957-bf04-350ce6475691`（2026-11-24 開工），工作鍵 `newhand31/go-shop:polyglot-program`
+- 指揮台：`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`（2026-11-25 接手；前一個指揮窗 `local_2e9951ea-e36b-4957-bf04-350ce6475691` 2026-11-24 開工），工作鍵 `newhand31/go-shop:polyglot-program`
 - 決策（示範店面與全端旗艦片）：見 `state/DECISIONS.md` 2026-11-24「前後端同片」那一條
 - 決策：`state/decisions/2026-11-24-204538-5d23bfb0.md`（英文優先與配音）、`state/decisions/2026-11-24-204539-f51a378a.md`（多語言計畫）
 - 使用者點頭：2026-11-24 同意全部排程、自動推進、每系列先行章把關
@@ -87,11 +87,11 @@
 | id | 內容 | repo | 依賴 | 先行章 | 狀態 |
 |---|---|---|---|---|---|
 | P0a | 產線雙語化：分鏡 `narration: { en, zh }`、句數檢查、Kokoro 配音、念法對照表、音量正規化、whisper 取時間點、英文與中文 SRT、長片不燒字幕。長片組裝：把各章接成一支、產生章節時間戳與合併後的 SRT。補英文口播規範與口播結構到 `docs/plain-style-guide.md` | go-shop-video、go-shop | — | — | done |
-| P0b | Go 英文版：一支長片（13 章，英文口播與中文 CC）、13 支 Short。改 `CLAUDE.md`、README 的語言說明 | go-shop、go-shop-video | P0a、P0e1 | ch05 | todo |
+| P0b | Go 英文版：一支長片（13 章，英文口播與中文 CC）、13 支 Short。改 `CLAUDE.md`、README 的語言說明 | go-shop、go-shop-video | P0a、P0e1 | ch05 | doing |
 | P0c | 建 `shop-contract`：完整契約（含付款回呼、搶購）、L1–L11 契約測試，拿 go-shop 跑到全綠 | shop-contract | — | — | done |
-| P0d | go-shop 新增一章：「開始付款」與「查訂單」兩支 API，進契約，打新 tag。同一片補 P0c 找到的三個缺口，讓 L7、L8、L10 變 `PASS`：用設定選的 SMTP 寄信、訂單逾期時間與清掃間隔可設定、接受進來的 `traceparent`（既有 tag 不動，改在 `main` 上）。契約測試那邊補四件：被擋的級在缺口補上後要變紅、L10 的缺口只認「追蹤編號不同」這一種失敗、L5／L6／L9／L11 各做一次故意弄壞的驗證、L11 加一個慢請求 | go-shop、shop-contract | P0c | — | todo |
+| P0d | go-shop 新增一章：「開始付款」與「查訂單」兩支 API，進契約，打新 tag。同一片補 P0c 找到的三個缺口，讓 L7、L8、L10 變 `PASS`：用設定選的 SMTP 寄信、訂單逾期時間與清掃間隔可設定、接受進來的 `traceparent`（既有 tag 不動，改在 `main` 上）。契約測試那邊補四件：被擋的級在缺口補上後要變紅、L10 的缺口只認「追蹤編號不同」這一種失敗、L5／L6／L9／L11 各做一次故意弄壞的驗證、L11 加一個慢請求 | go-shop、shop-contract | P0c | — | doing |
 | P0e1 | 示範店面前三段：一個 Next.js 店面，就是 `shop-web` 的 `apps/next` 最小版，先做商品、購物車、結帳（現有的 6 支 API 就夠用），後端網址用設定切換。每個事故一支 Playwright 腳本，自動錄下「事故發生」與「事故不再發生」兩段畫面。產線能把錄好的片段插進分鏡。作者 2026-11-24 同意先做這三段，P0a 或 P0c 的線一空出來就開 | shop-web、go-shop-video | — | — | done |
-| P0e2 | 示範店面後兩段：付款與查訂單，補上對應事故的 Playwright 腳本 | shop-web | P0e1、P0d | — | todo |
+| P0e2 | 示範店面後兩段：付款與查訂單，補上對應事故的 Playwright 腳本。同一片修 P0e1 留下的中等問題：啟動器拿不到鎖時，收尾不能清掉另一個啟動器的暫時 worktree | shop-web | P0e1、P0d | — | todo |
 | P1 | C# 系列 13 章：程式碼、tag、主張清單、一支長片、Short | cs-shop | P0a、P0c、P0e2 | ch01 | todo |
 | P2 | 前端共用篇 4 章（一支長片）：從契約產生 client、設計 token、錯誤碼對照、同一份 E2E | shop-web | P0a、P0d、P0e2 | ch01 | todo |
 | P3 | React（Next.js）8 章（一支長片）＋Short | shop-web | P2 | ch01 | todo |
@@ -111,12 +111,16 @@
 | P0a | `agent:worker`（2026-11-24 派出） | 產線：`local/go-shop-video:feat/bilingual-pipeline`（該 repo 沒有 remote，只在本機）；口播規範：`newhand31/go-shop:feat/english-narration-guide` | 完成。產線分支 2026-11-25 併進產線 `main`（本機 merge commit `5d7f194`，作者說由指揮窗併；這個 repo 沒有遠端）。併完在產線主 checkout 跑單元測試：46 過、1 不過。不過的是「沒搬的集數配音會失敗且不產生輸出」那一條，它假設 `public/ch05` 不存在，但主 checkout 留有舊的配音輸出；在乾淨的 worktree 會過。這是測試寫法的問題，排進「產線插入錄影片段」那一片修。以下是併之前的驗收紀錄。產線分支在第 1 輪修正後多 6 個 commit（head `7570c70`）；指揮窗清掉快取重跑 `npm run verify` exit 0，12 段配音與 12 段轉錄都沒走快取。全新 checker 第 2 輪：通過，0 個高、2 個中、3 個低。兩個中等問題是環境變數能放寬檢查（`ALLOW_FAKE_TIMINGS`、`PIPELINE_CONFIG`、`CLAIMS_LOCAL`），排進「產線插入錄影片段」那一片一起修。口播規範的 PR 26 已併（merge commit `cdb24cc`）。舊的 39 集字串分鏡現在會直接報錯、不能配音，要搬成 `{ en, zh }` 才能用，這在 P0b 處理 |
 | P0c | `agent:worker`（2026-11-24 派出） | `newhand31/shop-contract:feat/contract-l1-l11` | 完成。PR `newhand31/shop-contract` 1 號已併（merge commit `b1d961c`，作者 2026-11-25 說由指揮窗併）。指揮窗自己跑全跑指令：結束碼 2，L1–L6、L9、L11 `PASS`，L7、L8、L10 `BLOCKED`，沒有 `FAIL`。全新 checker 第 1 輪：通過，0 個高、4 個中、8 個低。被擋的三級與 4 個中等問題併進 P0d |
 | P0e1 | `agent:worker`（2026-11-24 派出） | `newhand31/shop-web:feat/storefront-first-three` | 完成。PR `newhand31/shop-web` 1 號已併（merge commit `0b16268`，作者 2026-11-25 說由指揮窗併），兩輪修正後 head 含 `42a5942`、`13549ed`（repo 是私人的）。指揮窗從全新 clone 跑安裝、`pnpm verify`、`pnpm record ch05` 都 exit 0，跑前跑後 `go-shop` 的 worktree 清單完全相同。全新 checker 第 3 輪：通過，0 個高、1 個中、3 個低。剩下的中等問題：兩個啟動器同時跑時，後到的失敗後會清掉先到的暫時 worktree（只傷啟動器自己的暫存）。第 5 章的事故補丁查過是真的改後端，沒有造假。第 6 章超賣的錄影還沒做，留到 P0b 做到那一章時補。產線插入錄影片段的部分等 P0a 的分支併進產線 `main` 再做 |
+| P0d | `session:local_291204f3-5fc5-4dea-9029-a4b5f237722c`（2026-11-25 派出，sonnet） | `newhand31/go-shop:feat/p0d-pay-and-orders`、`newhand31/shop-contract:feat/p0d-gates` | 進行中。還沒有可驗的產出 |
+| P0b | `session:local_fa860364-f52d-4995-abab-ed8e9681a99f`（2026-11-25 派出，sonnet） | `newhand31/go-shop:feat/p0b-english-series`、`local/go-shop-video:feat/p0b-english-series` | 進行中。這一段只做先行章 ch05，做完停下等作者看。同一段做「產線插入錄影片段」、修產線的兩個中等問題與那條只在乾淨目錄會過的單元測試、查證畫面與縮圖風格 |
 
+- P0d 的驗收指令：`go-shop` 分支上 `go build ./... && go vet ./... && go test ./... && go run ./cmd/claimcheck -strict` exit 0；既有 tag 的 sha 不變；`shop-contract` 分支的全跑指令對 `go-shop` 的 P0d 分支 exit 0，L1–L11 都 `PASS`、沒有 `BLOCKED`，兩支新 API 的測試有跑到；對 `go-shop` 的 `main`（缺口還沒補）時 L7、L8、L10 不是 `PASS`；L5、L6、L9、L11 的「故意弄壞」驗證有可重跑的做法。檔案分工：P0d 不動 `README.md`、`CLAUDE.md`、`docs/claims/`、`docs/transcripts/`、`docs/plain-style-guide.md`。新 tag 等 PR 併進 `main` 後由指揮窗打。
+- P0b 先行章的驗收指令：產線分支上 `npm test`、`npm run typecheck`、`npm run verify` 都 exit 0，設了 `ALLOW_FAKE_TIMINGS`、`PIPELINE_CONFIG`、`CLAIMS_LOCAL` 也不能放寬嚴格檢查；ch05 清掉快取後整條建置 exit 0，配音長度 8–10 分鐘，en 與 zh 句數相同，成片裡有店面的兩段錄影，長片版沒有燒字幕；`go-shop` 分支 `go run ./cmd/claimcheck -strict` exit 0。P0b 這一段不動 `api/`、`cmd/`、`internal/`、`docs/episodes.md`。
 - P0e1 的驗收指令：`pnpm verify`（typecheck、lint、build、E2E 對 `go-shop` 的 `main`）exit 0；`pnpm record ch05` 產出事故發生與事故不再發生兩段錄影。
 - P0a 的驗收指令：產線分支上 `npm run verify` exit 0；`go-shop` 的 PR 只動 `docs/plain-style-guide.md` 且 `go run ./cmd/claimcheck -strict` 通過。
 - P0c 的驗收指令：`shop-contract` 的全跑指令對 `go-shop` 的 `main`，L1–L11 都 `PASS`；`go-shop` 做不到的級標 `BLOCKED` 並記在 `shop-contract` 的 `docs/gaps.md`，由指揮窗決定怎麼補。
 - 產線 repo 的未追蹤資料夾 `episodes/measure01/` 已查：是另一個專案留下的試轉檔，沒有別的窗在做，本計畫不動它。
-- 畫面與縮圖的風格還沒查證。P0a 不改畫面設計，留到 P0b 的先行章之前查。
+- 畫面與縮圖的風格還沒查證。P0a 不改畫面設計，留到 P0b 的先行章之前查（已排進 P0b 先行章那一段）。
 
 ## 開工順序
 
