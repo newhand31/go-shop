@@ -1,6 +1,6 @@
 # 多語言計畫：同一份契約，多個後端與前端系列（英文優先）
 
-- 指揮台：交接中，等新指揮窗認領後改成自己。上一個指揮窗 `local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`（2026-11-25 接手，同日因 context 過長交接；前一個指揮窗 `local_2e9951ea-e36b-4957-bf04-350ce6475691` 2026-11-24 開工），工作鍵 `newhand31/go-shop:polyglot-program`
+- 指揮台：第三個指揮窗（2026-11-25 接手，由規劃窗 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0` 開出）。前兩個指揮窗 `local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。工作鍵 `newhand31/go-shop:polyglot-program`
 - 決策（示範店面與全端旗艦片）：見 `state/DECISIONS.md` 2026-11-24「前後端同片」那一條
 - 決策：`state/decisions/2026-11-24-204538-5d23bfb0.md`（英文優先與配音）、`state/decisions/2026-11-24-204539-f51a378a.md`（多語言計畫）
 - 使用者點頭：2026-11-24 同意全部排程、自動推進、每系列先行章把關。2026-11-25 同意把各片的點頭欄填成 2026-11-24，P7 除外（動工前先問作者）
@@ -112,7 +112,7 @@
 - 執行者：`session:local_fa860364-f52d-4995-abab-ed8e9681a99f`（2026-11-25 派出，sonnet）；分支／工作鍵 `newhand31/go-shop:feat/p0b-english-series`、`local/go-shop-video:feat/p0b-english-series`
 - 點頭：2026-11-24
 - 狀態：running
-- 證據：進行中。2026-11-25 交接時實查：執行窗還在跑，它的窗裡有一個只有作者能答的提問，等了一個多小時，指揮窗看不到內容、也不代答；產線分支有一個 commit `034de2e`（錄影片段的分鏡、正式章節拒絕測試用開關）；`go-shop` 的分支還沒推上 origin，沒有 PR。新指揮窗不等完成通知，用 git 實查分支進度。這一段只做先行章 ch05，做完停下等作者看。同一段做「產線插入錄影片段」、修產線的兩個中等問題與那條只在乾淨目錄會過的單元測試、查證畫面與縮圖風格
+- 證據：進行中。2026-11-25 第三個指揮窗實查：執行窗仍卡在它窗裡一個只有作者能答的提問，指揮窗看不到內容、也不代答；產線分支還是只有一個 commit `034de2e`（錄影片段的分鏡、正式章節拒絕測試用開關）；`go-shop` 的分支沒有新 commit、還沒推上 origin，沒有 PR。新指揮窗不等完成通知，用 git 實查分支進度。這一段只做先行章 ch05，做完停下等作者看。同一段做「產線插入錄影片段」、修產線的兩個中等問題與那條只在乾淨目錄會過的單元測試、查證畫面與縮圖風格
 
 ### P0c 契約與契約測試
 
@@ -141,8 +141,8 @@
 - 先行章：無
 - 執行者：`session:local_291204f3-5fc5-4dea-9029-a4b5f237722c`（2026-11-25 派出，sonnet）；分支／工作鍵 `newhand31/go-shop:feat/p0d-pay-and-orders`、`newhand31/shop-contract:feat/p0d-gates`
 - 點頭：2026-11-24
-- 狀態：fixing(1)
-- 證據：修正第 1 輪還沒驗收。2026-11-25 交接時實查：newhand31/go-shop#32 的 head 已是 `54929d5`（多一個 commit「a new MerchantTradeNo for every payment attempt」，對應第三個中等問題）；newhand31/shop-contract#2 的 head 還是 `5d80998`，L6 的兩個中等問題沒看到推上來；執行窗回報它還有兩個背景驗證在跑、還沒收工，兩支 PR 都開著、未併。新指揮窗要做的事：先問執行窗 L6 兩題修了沒，修完後跑 `rounds.py delta`，在全新 clone 重跑驗收指令，開全新 checker 做第 2 輪增量複審；帳本目前是退件 1 次。合併兩支 PR 要作者明說，新章的 tag 在 merge commit 上由指揮窗打。以下是第 1 輪的紀錄（當時 go-shop#32 的 head 是 `44a274b`）。指揮窗 2026-11-25 第 1 輪驗收：兩個 head 都在 origin；改動都在檔案清單內；既有 tag 的 sha 沒變；全新 clone 上 `go build`、`go vet`、`go test`、`claimcheck -strict` 結束碼 0（148 條過）；契約全跑對 P0d 分支結束碼 0，L1–L11 全 `PASS`；同一份契約測試對 `go-shop` 的 `main` 結束碼 1，L7（結帳後寄信、信件伺服器斷線後補寄）、L8（三項檢查）、L10（log 裡的追蹤編號）是 `FAIL`，符合「缺口沒補時不是 `PASS`」。全新 checker 第 1 輪：不過，0 個高、3 個中、9 個低。三個中等問題：L6「開始付款兩次」比對簽章，跨秒時正確的後端也會紅；L6「只開始付款不會入帳」的檢查永遠不會失敗；每張付款表單用同一個交易編號，綠界可能拒絕第二次付款（未證實，要查官方文件）。已請執行窗修
+- 狀態：accepted
+- 證據：完成。newhand31/go-shop#32 已併（merge commit `57b168f`，head `54929d5`），tag `ep14-pay-and-orders` 打在這個 merge commit 上；newhand31/shop-contract#2 已併（merge commit `7373bff`，head `04f15ab`，`go-shop` 併完後重跑 CI 是綠的）。合併依據：作者在規劃窗授權指揮窗審查與合併（由規劃窗轉達），驗收指令過、全新 checker 通過、指揮窗沒有疑慮才併。上一版交接寫「shop-contract#2 沒有新 commit」是過期資訊：`04f15ab` 修了 L6 的兩題。指揮窗 2026-11-25 第 2 輪驗收（全新 clone）：`go build`、`go vet`、`go test`、`claimcheck -strict` 結束碼 0（148 條過）；契約全跑對 P0d 分支結束碼 0，L1–L11 全 `PASS`；對併之前的 `main` 結束碼 1，L7、L8、L10 是 `FAIL`（L2、L6 也紅，因為當時 `main` 沒有兩支新 API）；`scripts/mutation-check.sh` 的五個故意弄壞驗證（5、6、6b、9、11）都被抓到；改動都在檔案清單內，既有 tag 沒動。全新 checker 第 2 輪：通過，0 個高、0 個中、5 個低，三個中等問題都修掉，交易編號的新格式對過綠界官方文件。規劃窗另開的一個獨立 checker 結論相同（0 高、0 中）。兩個 checker 的結論檔只在本機。留下的低等問題記在「其他紀錄」。跑契約測試的注意事項：這台機器的埠 15432 被另一個專案的資料庫占用，要帶 `SC_POSTGRES_PORT=25432`；`SRC_DIR` 要寫成 `C:/…` 的形式，寫 `/c/…` 時 `mutation-check.sh` 匯不出原始碼。以下是第 1 輪的紀錄（當時 go-shop#32 的 head 是 `44a274b`）。指揮窗 2026-11-25 第 1 輪驗收：兩個 head 都在 origin；改動都在檔案清單內；既有 tag 的 sha 沒變；全新 clone 上 `go build`、`go vet`、`go test`、`claimcheck -strict` 結束碼 0（148 條過）；契約全跑對 P0d 分支結束碼 0，L1–L11 全 `PASS`；同一份契約測試對 `go-shop` 的 `main` 結束碼 1，L7（結帳後寄信、信件伺服器斷線後補寄）、L8（三項檢查）、L10（log 裡的追蹤編號）是 `FAIL`，符合「缺口沒補時不是 `PASS`」。全新 checker 第 1 輪：不過，0 個高、3 個中、9 個低。三個中等問題：L6「開始付款兩次」比對簽章，跨秒時正確的後端也會紅；L6「只開始付款不會入帳」的檢查永遠不會失敗；每張付款表單用同一個交易編號，綠界可能拒絕第二次付款（未證實，要查官方文件）。已請執行窗修
 
 ### P0e1 示範店面前三段
 
@@ -282,6 +282,7 @@
 ## 其他紀錄
 
 - 產線 repo 的未追蹤資料夾 `episodes/measure01/` 已查：是另一個專案留下的試轉檔，沒有別的窗在做，本計畫不動它。
+- P0d 留下的低等問題（不擋合併，還沒排進任何片）：同一筆訂單開兩個付款分頁可能付兩次，系統只記帳、不示警（`internal/repository/payments.go`），建議寫 warn log 並在契約註明；故意弄壞驗證 6b 在「第二次開始付款回 409」就紅了，沒有單獨證明三條新的入帳檢查有用；訂單編號到 10 位數時交易編號會超過綠界的 20 字元上限，程式沒擋；契約允許交易編號 `T` 後面有大寫字母，`go-shop` 只收小寫；`docs/scripts/ep07.md`（中英）還寫著重複付款「沒處理」；tag 名 `ep14-pay-and-orders` 不在 `CLAUDE.md` 列的 tag 清單裡。
 - 畫面與縮圖的風格還沒查證。P0a 不改畫面設計，留到 P0b 的先行章之前查（已排進 P0b 先行章那一段）。
 
 ## 開工順序
