@@ -87,15 +87,16 @@
 | id | 內容 | repo | 依賴 | 先行章 | 狀態 |
 |---|---|---|---|---|---|
 | P0a | 產線雙語化：分鏡 `narration: { en, zh }`、句數檢查、Kokoro 配音、念法對照表、音量正規化、whisper 取時間點、英文與中文 SRT、長片不燒字幕。長片組裝：把各章接成一支、產生章節時間戳與合併後的 SRT。補英文口播規範與口播結構到 `docs/plain-style-guide.md` | go-shop-video、go-shop | — | — | doing |
-| P0b | Go 英文版：一支長片（13 章，英文口播與中文 CC）、13 支 Short。改 `CLAUDE.md`、README 的語言說明 | go-shop、go-shop-video | P0a、P0e | ch05 | todo |
+| P0b | Go 英文版：一支長片（13 章，英文口播與中文 CC）、13 支 Short。改 `CLAUDE.md`、README 的語言說明 | go-shop、go-shop-video | P0a、P0e1 | ch05 | todo |
 | P0c | 建 `shop-contract`：完整契約（含付款回呼、搶購）、L1–L11 契約測試，拿 go-shop 跑到全綠 | shop-contract | — | — | doing |
 | P0d | go-shop 新增一章：「開始付款」與「查訂單」兩支 API，進契約，打新 tag | go-shop、shop-contract | P0c | — | todo |
-| P0e | 示範店面：一個 Next.js 店面，就是 `shop-web` 的 `apps/next` 最小版（商品、購物車、結帳、付款、查訂單），後端網址用設定切換。每個事故一支 Playwright 腳本，自動錄下「事故發生」與「事故不再發生」兩段畫面。產線能把錄好的片段插進分鏡 | shop-web、go-shop-video | P0a、P0d | — | todo |
-| P1 | C# 系列 13 章：程式碼、tag、主張清單、一支長片、Short | cs-shop | P0a、P0c、P0e | ch01 | todo |
-| P2 | 前端共用篇 4 章（一支長片）：從契約產生 client、設計 token、錯誤碼對照、同一份 E2E | shop-web | P0a、P0d、P0e | ch01 | todo |
+| P0e1 | 示範店面前三段：一個 Next.js 店面，就是 `shop-web` 的 `apps/next` 最小版，先做商品、購物車、結帳（現有的 6 支 API 就夠用），後端網址用設定切換。每個事故一支 Playwright 腳本，自動錄下「事故發生」與「事故不再發生」兩段畫面。產線能把錄好的片段插進分鏡。作者 2026-11-24 同意先做這三段，P0a 或 P0c 的線一空出來就開 | shop-web、go-shop-video | — | — | todo |
+| P0e2 | 示範店面後兩段：付款與查訂單，補上對應事故的 Playwright 腳本 | shop-web | P0e1、P0d | — | todo |
+| P1 | C# 系列 13 章：程式碼、tag、主張清單、一支長片、Short | cs-shop | P0a、P0c、P0e2 | ch01 | todo |
+| P2 | 前端共用篇 4 章（一支長片）：從契約產生 client、設計 token、錯誤碼對照、同一份 E2E | shop-web | P0a、P0d、P0e2 | ch01 | todo |
 | P3 | React（Next.js）8 章（一支長片）＋Short | shop-web | P2 | ch01 | todo |
 | P4 | Vue（Nuxt）、Svelte（SvelteKit）、Angular 各 8 章（各一支長片）＋Short | shop-web | P3 | 各自的 ch01 | todo |
-| P5 | Rust 系列 13 章（一支長片）＋Short | rs-shop | P0a、P0c、P0e | ch01 | todo |
+| P5 | Rust 系列 13 章（一支長片）＋Short | rs-shop | P0a、P0c、P0e2 | ch01 | todo |
 | P6 | 對照特輯 4 支：超賣、付兩次、部署斷線各三種語言對照；換後端、前端不用改 | go-shop-video | P1、P4、P5 | 第 1 支 | todo |
 | P7 | 全端旗艦片：Go＋Next.js 從頭做到尾的一支全端長片，其餘系列照舊。長度、排在哪、與 Go 系列和 React 系列重複的內容怎麼處理都還沒定，動工前先問作者 | go-shop、shop-web、go-shop-video | P0b、P3 | 動工前問作者 | todo |
 
@@ -118,7 +119,7 @@
 ## 開工順序
 
 1. P0a 與 P0c 同時開始（不同 repo）。
-2. P0c 完成 → P0d。P0a 與 P0d 都完成 → P0e。P0e 完成 → P0b。
+2. P0a 或 P0c 的線一空出來 → P0e1。P0c 完成 → P0d。P0a 與 P0e1 都完成 → P0b（先行章 ch05 只用到購物車；付款那幾章的店面畫面等 P0e2）。P0d 與 P0e1 都完成 → P0e2。
 3. 之後依 P1、P2、P3、P4、P5、P6、P7 的順序補進空出的線。P7 動工前先問作者。
 
 ## 風險
