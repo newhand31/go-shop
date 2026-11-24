@@ -11,7 +11,20 @@
   - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
 
-- [ ] **開新的多語言計畫指揮窗，同時開 P0d 與 P0b**（交接自「go-shop#25｜指揮多語言計畫 P0a＋P0c｜進行中」）
+- [ ] **接手多語言計畫指揮窗，先驗 P0d 修正第 1 輪**（交接自「go-shop｜指揮多語言計畫 P0d＋P0b｜進行中」）
+  - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
+  - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。每片的狀態、執行窗的 id 與工作鍵、證據都在各片那一節。標頭的「指揮台」寫著交接中，新窗認領後改成自己。
+  - 現況：P0a、P0c、P0e1 是 `accepted`。P0d 是 `fixing(1)`，P0b 是 `running`，兩個執行窗都還開著，新窗用計畫檔裡的 id 直接傳訊息，不重開。其餘都是 `planned`；除了 P7，每片都有作者的點頭。
+  - 現況：P0d 第 1 輪被全新 checker 退件（3 個中等問題）。執行窗推了一個 commit 修交易編號那一題；契約 repo 的 PR 沒有新 commit，L6 的兩題沒看到修。下一步：問執行窗、等它修完、跑 `rounds.py delta`、全新 clone 重跑驗收指令、開全新 checker 做第 2 輪。修正最多兩輪。
+  - 現況：P0b 的執行窗卡在一個只有作者能答的提問，要作者去那個窗回答。ch05 先行章做完要停下請作者看。
+  - 現況：要作者明說才能做的事：合併 newhand31/go-shop#32 與 newhand31/shop-contract#2（第 2 輪過了之後）、任何公開動作、P7 動工。新章的 tag 在 merge commit 上由指揮窗打，既有 tag 不動。
+  - 現況：計畫檔標了 `tick：on`，但沒有「合併檢查」那一行，所以定時推進不會自己合併。P0e2 依賴 P0d，等 P0d 是 `accepted` 才派；它包含修店面啟動器搶鎖的問題。同時最多兩條線。
+  - 現況：各 repo 已併的分支都還沒刪，等查證後批次建議。newhand31/go-shop#31 只改文件，併的時候沒有審查戳記。checker 的結論檔只在本機，不進這個 repo。
+  - 檔案：`docs/plans/2026-11-24-polyglot-program.md`、`state/decisions/2026-11-24-*.md`、`docs/plain-style-guide.md`；另外三個 repo：影片產線、`shop-contract`、`shop-web`。
+  - 完成的樣子：計畫檔每片都是 accepted、handoff 或 dropped。
+  - 工作鍵：newhand31/go-shop:polyglot-program
+
+- [x] **開新的多語言計畫指揮窗，同時開 P0d 與 P0b**（交接自「go-shop#25｜指揮多語言計畫 P0a＋P0c｜進行中」）
   - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
   - 現況：計畫檔是正本，各片的證據欄有實查紀錄。P0a（產線雙語化）、P0c（契約與契約測試）、P0e1（示範店面前三段）都是 `done`，都已併進各自的主幹。
   - 現況：依賴已滿足的下一步是 P0d 與 P0b，同時最多兩條線。P0b 的 ch05 先行章做完要停下請作者看；做到畫面前要先查證畫面與縮圖風格。
