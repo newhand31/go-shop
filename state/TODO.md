@@ -11,6 +11,20 @@
   - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
 
+- [ ] **接手多語言計畫指揮窗，先驗 P0e2 修正第 1 輪**（交接自「go-shop｜指揮多語言計畫 派 P0e2｜進行中」）
+  - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
+  - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。每片的狀態、執行窗的 id 與工作鍵、證據都在各片那一節。標頭的「指揮台」寫著交接中，新窗認領後改成自己。
+  - 現況：P0a、P0c、P0d、P0e1 是 `accepted`。P0d 執行窗的收尾已驗（兩個認領都已結案）。
+  - 現況：P0e2 是 `fixing(1)`。PR `newhand31/shop-web` 2 號還沒併。checker 第 1 輪不過（1 個中等問題：付款表單可能送到綠界正式站），指揮窗重跑時 `pnpm record ch14` 失敗一次。兩件都已傳給執行窗，細節在計畫檔 P0e2 的證據欄。
+  - 現況：新窗的第一步：用 git 與 `gh pr view` 實查 PR 的新 head，不等完成通知；在全新 clone 重跑計畫檔 P0e2 的全部驗收指令（要設 `GO_SHOP_DIR` 指向 `go-shop` 的 checkout；埠是固定的，一次只能跑一份）；開新的 checker 做第 2 輪。都過就合併，第 2 輪還不過就問作者。
+  - 現況：P0b 是 `running`，執行窗卡在它窗裡一個只有作者能答的提問，分支沒有新進度。不代答、不重開。ch05 先行章做完要停下請作者看。同時最多兩條線：P0b 與 P0e2。
+  - 現況：P0e2 併完後，依賴滿足的下一片是 P1（C# 系列，先行章 ch01）與 P2（前端共用篇）、P5；派工前由指揮窗把驗收指令補成可執行的。app 不讓指揮窗在自動接續的回合把子對話開到別的資料夾，子對話開在 repo 上層資料夾、自己開短路徑的 worktree。
+  - 現況：合併的授權由規劃窗轉達：驗收指令過、全新 checker 通過、指揮窗沒有疑慮的 PR 可以併（merge commit、不刪分支）；有疑慮、有高風險發現、修兩輪不過就問作者。只改計畫檔的 PR 合併時沒有審查戳記，hook 會提醒。各 repo 已併的分支都還沒刪。
+  - 現況：跑契約測試要帶 `SC_POSTGRES_PORT=25432`，`SRC_DIR` 寫成 `C:/…` 的形式；這個埠也是 `shop-web` 啟動器的資料庫埠，兩邊不要同時跑。
+  - 檔案：`docs/plans/2026-11-24-polyglot-program.md`、`state/decisions/2026-11-24-*.md`、`docs/plain-style-guide.md`；另外三個 repo：影片產線、`shop-contract`、`shop-web`。
+  - 完成的樣子：計畫檔每片都是 accepted、handoff 或 dropped。
+  - 工作鍵：newhand31/go-shop:polyglot-program
+
 - [x] **接手多語言計畫指揮窗，先派 P0e2 並驗 P0d 執行窗收尾**（交接自「go-shop#32｜指揮多語言計畫 P0d 第 2 輪驗收｜進行中」）
   - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
   - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。每片的狀態、執行窗的 id 與工作鍵、證據都在各片那一節。標頭的「指揮台」要改成新窗。
