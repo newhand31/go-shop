@@ -1,6 +1,6 @@
 # 多語言計畫：同一份契約，多個後端與前端系列（英文優先）
 
-- 指揮台：交接中。第四個指揮窗 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`（2026-11-25 接手）因 context 過長交接，新窗認領後改成自己。前三個指揮窗 `local_9ef31a99-8861-49a4-aa06-35dde6b89f39`、`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。規劃窗是 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0`。工作鍵 `newhand31/go-shop:polyglot-program`
+- 指揮台：第五個指揮窗 `local_ab8343fc-3c7f-4c21-8c4a-b57231401f97`（2026-11-26 接手，由規劃窗開出）。第四個指揮窗 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`（2026-11-25 接手）因 context 過長交接。前三個指揮窗 `local_9ef31a99-8861-49a4-aa06-35dde6b89f39`、`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。規劃窗是 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0`。工作鍵 `newhand31/go-shop:polyglot-program`
 - 決策（示範店面與全端旗艦片）：見 `state/DECISIONS.md` 2026-11-24「前後端同片」那一條
 - 決策：`state/decisions/2026-11-24-204538-5d23bfb0.md`（英文優先與配音）、`state/decisions/2026-11-24-204539-f51a378a.md`（多語言計畫）
 - 使用者點頭：2026-11-24 同意全部排程、自動推進、每系列先行章把關。2026-11-25 同意把各片的點頭欄填成 2026-11-24，P7 除外（動工前先問作者）
@@ -171,8 +171,8 @@
 - 先行章：無
 - 執行者：`session:local_6a2b2027-1ed9-40b2-9515-ea2543750e80`（2026-11-25 派出，sonnet）；分支／工作鍵 `newhand31/shop-web:feat/p0e2-pay-and-orders`
 - 點頭：2026-11-24
-- 狀態：fixing(1)
-- 證據：修正第 1 輪進行中，還沒合併。PR `newhand31/shop-web` 2 號，第 1 輪的 head 是 `1c91758`（在 origin，改動都在 `shop-web` 內）。指揮窗 2026-11-25 在全新 clone 重跑：安裝、`pnpm verify`、`pnpm test:scripts`、`pnpm record ch09`、`pnpm record ch05` 結束碼 0，跑前跑後 `go-shop` 的 worktree 清單相同；`pnpm record ch14` 結束碼 1，修好段的後端一啟動就連不上資料庫而退出（可能是兩段之間資料庫還沒準備好，也可能是執行窗同時在用同一個 compose 專案，已請執行窗查是哪一種）。全新 checker 第 1 輪：不過，0 個高、1 個中、6 個低（結論檔只在本機）。中等問題：啟動器把整個環境變數傳給後端，機器上若設了綠界的三個商店變數，後端會回正式站網址，而攔截只認測試站，付款表單可能送到正式站。已請執行窗修：清掉那三個變數、攔截所有非本機的表單送出、補一條修之前會失敗的測試，低等問題一併修。checker 確認沒問題的：鎖的修正與新測試、第 9 章與第 14 章的錄影斷言、產生的 API client、第 7 章不錄的理由、沒有密鑰與本機路徑。下一步：執行窗回報後，新指揮窗用 git 實查新的 head、在全新 clone 重跑全部驗收指令、開新的 checker 做第 2 輪；都過就合併（merge commit、不刪分支）。這是修正第 1 輪，第 2 輪還不過就停下問作者。以下是派工時的紀錄。2026-11-25 第四個指揮窗派出。章號由指揮窗定：第 14 章（付款與查訂單頁面本身；事故段用 tag `ep13-pitfalls` 的後端）與第 9 章（逾期訂單釋放庫存，靠查訂單頁看得到）是必做。第 7 章「付兩次錢」的差別只在入帳紀錄，查訂單 API 只回狀態，店面上可能看不出來；執行窗先評估，看得到才錄，看不到就在 PR 說明原因，不造假。付款不送到綠界的網站，E2E 與錄影改由腳本送簽章正確的回呼。執行窗開在 repo 上層資料夾（app 不讓指揮窗在自動接續的回合把子對話開到別的資料夾），它自己在短路徑開 `shop-web` 的 worktree 做。P0d 執行窗的收尾已用 coord 實查：兩個認領都是 `closed`（原因 `merged`），收尾記錄 `none`
+- 狀態：accepted
+- 證據：完成。PR `newhand31/shop-web#2` 2026-11-26 由第五個指揮窗合併（merge commit `62dbdf5`，兩個 parent，分支沒刪），合併時 head `6664804`、PR 沒有 CI。修正兩輪：第 1 輪的中等問題（啟動器把整個環境變數傳給後端，設了綠界正式商店變數會打到正式站）第 2 輪確認修掉；第 2 輪 `pnpm verify` 因付款導頁競速結束碼 1，第 3 輪確認修掉。第 3 輪驗收由 tick 在全新 clone（HEAD `6664804`）跑：安裝、`pnpm verify`、`pnpm test:scripts`、`pnpm record ch14`、`pnpm record ch09`、`pnpm record ch05` 都結束碼 0，跑前跑後 `go-shop` 的 worktree 清單相同。全新 checker 第 3 輪（增量 `5964324..6664804`）：通過，0 高、0 中、2 低，結論檔只在本機。指揮窗合併前自己讀過 `scripts/lib/backend.mjs` 的 `apiEnv`：後端只繼承 12 個系統變數的白名單，綠界三個商店變數最後強制清空、`extra` 蓋不回來。兩個低等問題沒修，記在「其他紀錄」。各輪細節在本檔的 git 歷史裡。
 
 ### P1 C# 系列
 
@@ -180,14 +180,14 @@
 - 目標：C# 系列 13 章：程式碼、tag、主張清單、一支長片、Short
 - repo：cs-shop
 - 檔案：`cs-shop` 整個 repo（待建，先建成私人的）
-- 驗收指令：每章照「每章的驗收」表的後端章欄；派工前由指揮窗補成可執行指令
+- 驗收指令：分兩段派。**第一段（2026-11-26 派）只做 ch01 的程式、tag 與主張，不做配音與影片**，因為產線 `go-shop-video` 整個 repo 正被 P0b 改著，兩片的檔案不能重疊。第一段的檔案：`cs-shop` 整個 repo，加上 `shop-contract` 的 `backends/cs-shop.sh`、`backends/cs-shop.Dockerfile`（若需要）與 `README.md`／`docs/gaps.md` 裡講 backend 清單的段落。第一段的驗收指令，全部 exit 0：① `gh repo view newhand31/cs-shop --json visibility -q .visibility` 印 `PRIVATE`；② `cs-shop` 的 tag `ep01`（照 `go-shop` 的集數 tag 命名）在 origin，在它的乾淨 checkout 上 `dotnet build` 與 `dotnet test` exit 0；③ 在 `go-shop` 用 `go build -o <暫存>/claimcheck.exe ./cmd/claimcheck` 建出檢查器，到 `cs-shop` 的 `ep01` checkout 跑 `<暫存>/claimcheck.exe -strict docs/claims/ch01.json` exit 0，每條主張有 `claim_en`；④ `shop-contract` 的分支上 `BACKEND=cs-shop LEVEL=1 SRC_DIR=C:/<cs-shop 的 ep01 checkout> SC_POSTGRES_PORT=25432 ./run.sh` exit 0；⑤ 同一分支上 `BACKEND=go-shop SRC_DIR=C:/<go-shop main 的 checkout> SC_POSTGRES_PORT=25432 ./run.sh` 的結果跟 `shop-contract` 的 `main` 一樣（go-shop 不被改壞）；⑥ `cs-shop` 與 `shop-contract` 的分支 `git grep -nE "C:[/\\\\]Users|AppData"` 沒有命中，沒有密鑰。第二段（等 P0b 的產線分支併進產線 `main` 再派）：ch01 的英文口播與中文 CC、配音、店面錄影，照「每章的驗收」後端章欄；做完停下請作者看先行章，說可以才做其餘 12 章。
 - 完成的樣子：該系列每章都過「每章的驗收」，長片過長片的驗收；先行章作者看過說可以。
 - 依賴：P0a,P0c,P0e2
 - 先行章：ch01
-- 執行者：未派
+- 執行者：`session:待點卡（工作鍵 newhand31/cs-shop:feat/ch01、newhand31/shop-contract:feat/cs-shop-backend）`，sonnet；卡由第五個指揮窗 2026-11-26 出
 - 點頭：2026-11-24
-- 狀態：planned
-- 證據：還沒開始
+- 狀態：running
+- 證據：第一段等作者點提案卡才開工。這個回合是別的窗的訊息喚起的，app 不讓指揮窗直接開子對話，所以出卡。作者點卡後，下一個指揮窗或 tick 把執行者改成那個窗的 `local_` id；卡一週沒人點就作廢，改回 `planned` 重出。
 
 ### P2 前端共用篇
 
@@ -283,6 +283,7 @@
 
 - 產線 repo 的未追蹤資料夾 `episodes/measure01/` 已查：是另一個專案留下的試轉檔，沒有別的窗在做，本計畫不動它。
 - P0d 留下的低等問題（不擋合併，還沒排進任何片）：同一筆訂單開兩個付款分頁可能付兩次，系統只記帳、不示警（`internal/repository/payments.go`），建議寫 warn log 並在契約註明；故意弄壞驗證 6b 在「第二次開始付款回 409」就紅了，沒有單獨證明三條新的入帳檢查有用；訂單編號到 10 位數時交易編號會超過綠界的 20 字元上限，程式沒擋；契約允許交易編號 `T` 後面有大寫字母，`go-shop` 只收小寫；`docs/scripts/ep07.md`（中英）還寫著重複付款「沒處理」；tag 名 `ep14-pay-and-orders` 不在 `CLAUDE.md` 列的 tag 清單裡。
+- P0e2 留下的低等問題（不擋合併，還沒排進任何片）：`shop-web` 的 `ecpay-safety.test.mjs` 測 `startBackend` 的環境是讀原始碼字串，重構可能繞過，改成匯出 spawn 選項再測比較穩；`storefront.spec.ts`「each browser has its own cart」自己開 context，不在攔截 fixture 內，目前只逛本機頁面、沒有實際風險。
 - 畫面與縮圖的風格還沒查證。P0a 不改畫面設計，留到 P0b 的先行章之前查（已排進 P0b 先行章那一段）。
 
 ## 開工順序
