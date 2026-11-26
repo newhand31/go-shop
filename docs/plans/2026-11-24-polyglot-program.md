@@ -1,6 +1,6 @@
 # 多語言計畫：同一份契約，多個後端與前端系列（英文優先）
 
-- 指揮台：第五個指揮窗 `local_ab8343fc-3c7f-4c21-8c4a-b57231401f97`（2026-11-26 接手，由規劃窗開出）。第四個指揮窗 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`（2026-11-25 接手）因 context 過長交接。前三個指揮窗 `local_9ef31a99-8861-49a4-aa06-35dde6b89f39`、`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。規劃窗是 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0`。工作鍵 `newhand31/go-shop:polyglot-program`
+- 指揮台：第六個指揮窗 `local_07f03056-2122-4b77-8a5a-38b33e26fa89`（2026-11-26 接手，由第五個指揮窗開出）。第五個指揮窗 `local_ab8343fc-3c7f-4c21-8c4a-b57231401f97`（2026-11-26 接手）交接。第四個指揮窗 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`（2026-11-25 接手）因 context 過長交接。前三個指揮窗 `local_9ef31a99-8861-49a4-aa06-35dde6b89f39`、`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。規劃窗是 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0`。工作鍵 `newhand31/go-shop:polyglot-program`
 - 決策（示範店面與全端旗艦片）：見 `state/DECISIONS.md` 2026-11-24「前後端同片」那一條
 - 決策：`state/decisions/2026-11-24-204538-5d23bfb0.md`（英文優先與配音）、`state/decisions/2026-11-24-204539-f51a378a.md`（多語言計畫）
 - 使用者點頭：2026-11-24 同意全部排程、自動推進、每系列先行章把關。2026-11-25 同意把各片的點頭欄填成 2026-11-24，P7 除外（動工前先問作者）
@@ -199,10 +199,10 @@
 - 完成的樣子：該系列每章都過「每章的驗收」，長片過長片的驗收；先行章作者看過說可以。
 - 依賴：P0a,P0c,P0e2
 - 先行章：ch01
-- 執行者：`session:待點卡（工作鍵 newhand31/cs-shop:feat/ch01、newhand31/shop-contract:feat/cs-shop-backend）`，sonnet；卡由第五個指揮窗 2026-11-26 出
+- 執行者：第一段 `session:local_e192a284-fdb6-42d7-a1ab-d6babe066f2a（工作鍵 newhand31/cs-shop:feat/ch01、newhand31/shop-contract:feat/cs-shop-backend）`，sonnet；卡由第五個指揮窗 2026-11-26 出，作者 2026-11-26 點卡
 - 點頭：2026-11-24
 - 狀態：running
-- 證據：第一段等作者點提案卡才開工。這個回合是別的窗的訊息喚起的，app 不讓指揮窗直接開子對話，所以出卡。作者點卡後，下一個指揮窗或 tick 把執行者改成那個窗的 `local_` id；卡一週沒人點就作廢，改回 `planned` 重出。
+- 證據：第一段已開工（作者 2026-11-26 點卡），執行窗做完回報後由指揮窗照驗收指令①–⑥驗。第二段等 P0b 的產線分支併進產線 `main`。
 
 ### P2 前端共用篇
 
