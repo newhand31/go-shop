@@ -201,8 +201,8 @@
 - 先行章：ch01
 - 執行者：第一段 `session:local_e192a284-fdb6-42d7-a1ab-d6babe066f2a（工作鍵 newhand31/cs-shop:feat/ch01、newhand31/shop-contract:feat/cs-shop-backend）`，sonnet；卡由第五個指揮窗 2026-11-26 出，作者 2026-11-26 點卡
 - 點頭：2026-11-24
-- 狀態：running
-- 證據：第一段已開工（作者 2026-11-26 點卡），執行窗做完回報後由指揮窗照驗收指令①–⑥驗。第二段等 P0b 的產線分支併進產線 `main`。
+- 狀態：fixing(1)
+- 證據：第一段 PR `newhand31/cs-shop#1`（`feat/ch01` 39a8def）、`newhand31/shop-contract#3`（b0d32f8）。第 1 輪驗收 2026-11-26：全新 clone 上①–⑥都 exit 0，⑤分支與 `main` 都是 L01–L11 全 PASS；全新 checker PASS，但有一條 medium：主張 C1-5 的檢查在 Development 環境跑，證不出 `ValidateOnBuild = true` 是原因。修這條要改 `ep01` 上的主張檔，作者 2026-11-26 同意**只此一次**把 `cs-shop` 的 `ep01` 移到修正後的 commit（它還沒併、沒被引用）；其他 tag 照舊不動。修正第 1 輪已送回執行窗。第二段等 P0b 的產線分支併進產線 `main`。
 
 ### P2 前端共用篇
 
