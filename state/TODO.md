@@ -11,7 +11,19 @@
   - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
 
-- [ ] **接手多語言計畫指揮窗，先驗 P0e2 修正第 1 輪**（交接自「go-shop｜指揮多語言計畫 派 P0e2｜進行中」）
+- [ ] **接手多語言計畫指揮窗，驗 P1 第一段並等 P0b 先行章**（交接自「go-shop｜指揮多語言計畫 驗併 P0e2｜進行中」）
+  - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
+  - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。每片的狀態、執行窗的 id 與工作鍵、證據都在各片那一節。標頭的「指揮台」要改成新窗。
+  - 現況：P0a、P0c、P0d、P0e1、P0e2 是 `accepted`。P0e2 的 PR `newhand31/shop-web#2` 2026-11-26 已併（merge commit `62dbdf5`）；計畫檔的更新是 PR 38，已併。
+  - 現況：P1 拆成兩段。第一段只做 `cs-shop` ch01 的程式、tag `ep01`、主張與契約 L1，驗收指令已寫進計畫檔 P1 節。第一段的提案卡已出（標題「P1 C# 系列 ch01：程式、tag、主張、契約 L1」），要作者點卡才開工；點了之後把執行者改成那個窗的 `local_` id。卡一週沒人點就作廢，改回 `planned` 重出。第二段（配音與影片）要等 P0b 的產線分支併進產線 `main` 才派，因為兩片都動 `go-shop-video`。
+  - 現況：P0b 是 `running`。執行窗 `local_fa860364-f52d-4995-abab-ed8e9681a99f` 在等作者回答一題，不代答、不重開。ch05 先行章做完要停下請作者看。同時最多兩條線：P0b 與 P1。P2、P5 依賴已滿足，等線空出來。
+  - 現況：封存：P0e2 執行窗 `local_6a2b2027-1ed9-40b2-9515-ea2543750e80` 已收尾（`none`、認領已結案、標題 ✅），但 app 回「還有 live work（遠端控制連線）」不讓封；它的上層 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`、`local_9ef31a99-8861-49a4-aa06-35dde6b89f39` 要等它封完再封。`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20` 與 `local_2e9951ea-e36b-4957-bf04-350ce6475691` 是 P0b 執行窗的上層，P0b 沒做完前不封（封父窗會連帶封掉閒置的子窗）。
+  - 現況：合併授權照舊：驗收指令過、全新 checker 通過、CI 綠、指揮窗沒有疑慮就合併（merge commit、不刪分支）；有中高風險疑慮、修兩輪不過就問作者。跑契約測試帶 `SC_POSTGRES_PORT=25432`，`SRC_DIR` 寫成 `C:/…`；這個埠也是 `shop-web` 啟動器的資料庫埠，兩邊不要同時跑。公開 repo 的計畫檔不寫本機路徑與使用者名稱。
+  - 檔案：`docs/plans/2026-11-24-polyglot-program.md`、`state/decisions/2026-11-24-*.md`；另外的 repo：影片產線、`shop-contract`、`shop-web`、`cs-shop`（待建）。
+  - 完成的樣子：計畫檔每片都是 accepted、handoff 或 dropped。
+  - 工作鍵：newhand31/go-shop:polyglot-program
+
+- [x] **接手多語言計畫指揮窗，先驗 P0e2 修正第 1 輪**（交接自「go-shop｜指揮多語言計畫 派 P0e2｜進行中」）
   - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
   - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。每片的狀態、執行窗的 id 與工作鍵、證據都在各片那一節。標頭的「指揮台」寫著交接中，新窗認領後改成自己。
   - 現況：P0a、P0c、P0d、P0e1 是 `accepted`。P0d 執行窗的收尾已驗（兩個認領都已結案）。
