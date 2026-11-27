@@ -1,7 +1,7 @@
 # Multi-stage build: the toolchain stays in the first stage, only the binary ships.
 # Build (from the repo root):  docker build -t go-shop .
 
-ARG GO_VERSION=1.27.0
+ARG GO_VERSION=1.27.4
 
 # ---- build stage: Go toolchain, source, module cache. None of this reaches the final image.
 FROM golang:${GO_VERSION}-alpine AS build
