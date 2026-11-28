@@ -11,7 +11,7 @@
   - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
 
-- [ ] **接手多語言計畫指揮窗，驗收 P1 cs-ch01 並盯 P0b 其餘 12 章**（交接自「go-shop｜多語言計畫第八指揮台｜進行中」）
+- [x] **接手多語言計畫指揮窗，驗收 P1 cs-ch01 並盯 P0b 其餘 12 章**（交接自「go-shop｜多語言計畫第八指揮台｜進行中」）
   - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在每個系列的先行章、機器修三輪不過、公開發佈、P7 動工前介入。
   - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。標頭寫「交接中」，新窗認領後改成自己（第九個指揮窗）。
   - 現況：P1 第二段執行窗 `local_5f2524e0-7eb3-4935-adf0-0ca23448019f`（sonnet）在跑 cs-ch01 的完整 build；做完會量章長、問過 12 章窗再 build cs-short01，然後 commit 產線分支、推 `shop-web` 並開 PR，回報 sha 與 PR 號。收到後照計畫檔 P1 節第二段驗收指令①–⑦在全新 clone 冷跑，再開全新 checker；過了狀態改 `decision`，把成品給作者看先行章。進度細節在計畫檔 P1 證據欄。
