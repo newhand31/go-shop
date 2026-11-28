@@ -1,6 +1,6 @@
 # 多語言計畫：同一份契約，多個後端與前端系列（英文優先）
 
-- 指揮台：第六個指揮窗 `local_07f03056-2122-4b77-8a5a-38b33e26fa89`（2026-11-26 接手，由第五個指揮窗開出）。第五個指揮窗 `local_ab8343fc-3c7f-4c21-8c4a-b57231401f97`（2026-11-26 接手）交接。第四個指揮窗 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`（2026-11-25 接手）因 context 過長交接。前三個指揮窗 `local_9ef31a99-8861-49a4-aa06-35dde6b89f39`、`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。規劃窗是 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0`。工作鍵 `newhand31/go-shop:polyglot-program`
+- 指揮台：交接中，下一個指揮窗認領後改成自己。第七個指揮窗 `local_4aa85eac-329d-4c94-90b8-400d4d16c8bf`（2026-11-28 接手，驗併 P0b 產線分支）因 context 過長交接。第六個指揮窗 `local_07f03056-2122-4b77-8a5a-38b33e26fa89`（2026-11-26 接手，由第五個指揮窗開出）交接。第五個指揮窗 `local_ab8343fc-3c7f-4c21-8c4a-b57231401f97`（2026-11-26 接手）交接。第四個指揮窗 `local_49776d97-14be-43c4-89c4-23daa6dc0ed8`（2026-11-25 接手）因 context 過長交接。前三個指揮窗 `local_9ef31a99-8861-49a4-aa06-35dde6b89f39`、`local_ec80beeb-5c15-42d2-9d13-ba4177f78c20`、`local_2e9951ea-e36b-4957-bf04-350ce6475691` 都因 context 過長交接。規劃窗是 `local_cb9273e6-fc32-4611-bbf8-15ccb22061e0`。工作鍵 `newhand31/go-shop:polyglot-program`
 - 決策（示範店面與全端旗艦片）：見 `state/DECISIONS.md` 2026-11-24「前後端同片」那一條
 - 決策：`state/decisions/2026-11-24-204538-5d23bfb0.md`（英文優先與配音）、`state/decisions/2026-11-24-204539-f51a378a.md`（多語言計畫）
 - 使用者點頭：2026-11-24 同意全部排程、自動推進、每系列先行章把關。2026-11-25 同意把各片的點頭欄填成 2026-11-24，P7 除外（動工前先問作者）
@@ -119,10 +119,10 @@
 - 完成的樣子：先行章 ch05 的成片、兩條 SRT、Short、縮圖候選都在，作者看過說可以；之後 13 章接成一支長片，每章都過「每章的驗收」。
 - 依賴：P0a,P0e1
 - 先行章：ch05
-- 執行者：`session:local_fa860364-f52d-4995-abab-ed8e9681a99f`（2026-11-25 派出，sonnet）；分支／工作鍵 `newhand31/go-shop:feat/p0b-english-series`、`local/go-shop-video:feat/p0b-english-series`
+- 執行者：`session:local_fa860364-f52d-4995-abab-ed8e9681a99f`（2026-11-25 派出，sonnet）；分支／工作鍵 `newhand31/go-shop:feat/p0b-english-series`、`local/go-shop-video:feat/p0b-english-series`（先行章，已完成）；其餘 12 章 `session:local_4753e6ab-e501-46b2-93dd-4579e9d79638`（由先行章窗開出；工作鍵 `newhand31/go-shop:feat/p0b-chapters-a`、`local/go-shop-video:feat/p0b-chapters-a`）
 - 點頭：2026-11-24
 - 狀態：running
-- 證據：進行中。2026-11-25 第三個指揮窗實查：執行窗仍卡在它窗裡一個只有作者能答的提問，指揮窗看不到內容、也不代答；產線分支還是只有一個 commit `034de2e`（錄影片段的分鏡、正式章節拒絕測試用開關）；`go-shop` 的分支沒有新 commit、還沒推上 origin，沒有 PR。新指揮窗不等完成通知，用 git 實查分支進度。這一段只做先行章 ch05，做完停下等作者看。同一段做「產線插入錄影片段」、修產線的兩個中等問題與那條只在乾淨目錄會過的單元測試、查證畫面與縮圖風格
+- 證據：進行中。**先行章段完成（2026-11-28 第七個指揮窗實查）**：作者看過 ch05 放行；`go-shop` 的 PR 49 已併（merge commit 32c0b7a，ch05 與 short05 逐字稿）。產線分支 `feat/p0b-english-series` 併進產線 `main`（merge commit 3d39216，含 034de2e、5740ffd、bd89fd5、修正 4a16a89）。驗收：全新 clone 冷跑（Kokoro 與 whisper 0 段來自快取）`npm ci`、`uv sync --frozen`、`npm test`、`npm run typecheck`、`npm run verify` 在 bd89fd5 與 4a16a89 都 exit 0。全新 checker 第 1 輪 FAIL（M1 放寬開關的測試只比對原始碼、M2 `ALLOW_FAKE_TIMINGS` 在非 strict 時能讓正式章節用假時間），修正 1 輪後第 2 輪 PASS（rounds.py 記錄 REJECT→APPROVE）；checker 結論檔只在本機。ch05 清快取整章重建這次沒有重跑（作者已看過成片）。**其餘 12 章**：執行窗 `local_4753e6ab…`，`go-shop` 分支 `feat/p0b-chapters-a` 有 b8573a9（第 1、7、10、12 章主張），產線分支有 66a6073（ch01–04、06–10、12 與其 Short 的英文分鏡）；ch11、ch13 的子代理在等作者核准 Bash 權限。已請它把產線 `main` merge 進 `feat/p0b-chapters-a`。ch05 的 PR 49 審查留下 4 個小問題（F1–F4，改分鏡要重配音重渲），等 12 章配音告一段落再修。以下為舊紀錄：2026-11-25 第三個指揮窗實查：執行窗仍卡在它窗裡一個只有作者能答的提問，指揮窗看不到內容、也不代答；產線分支還是只有一個 commit `034de2e`（錄影片段的分鏡、正式章節拒絕測試用開關）；`go-shop` 的分支沒有新 commit、還沒推上 origin，沒有 PR。新指揮窗不等完成通知，用 git 實查分支進度。這一段只做先行章 ch05，做完停下等作者看。同一段做「產線插入錄影片段」、修產線的兩個中等問題與那條只在乾淨目錄會過的單元測試、查證畫面與縮圖風格
 
 ### P0c 契約與契約測試
 
@@ -305,6 +305,8 @@
 - 證據：還沒開始
 
 ## 其他紀錄
+
+- P0b 產線分支留下的問題（不擋合併，還沒排進任何片）：**公開發佈前必清**：產線的分鏡（ch05、short05 與其他約 30 個，main 上原本就有）的 `repo` 欄寫死本機絕對路徑、含使用者名稱，要改成環境變數或 gitignored 設定。low：沒設 EP 時各腳本預設 `ep01`，`CHAPTER_IDS=<fixture>` 仍能讓 gate 放行而跑正式 ep01（gate 應看 `EP||"ep01"`，`CHAPTER_IDS` 只給 longfilm）；verify.mjs 的 env 清理仍只用原始碼比對測；align 對 `fakeTimingsMode` 的呼叫沒有測試；clip 比段落長時靜默截斷；`scenes.tsx` 的 `code!.clip!` 在 code.json 過期時丟不明 TypeError；`mergeHeard` 沒有反例測試；`docs/visual-style-check.md` 寫縮圖 3840x2160，但 Root.tsx 是 1920x1080；產線 README 對 `ALLOW_FAKE_TIMINGS` 的說明已過時（現在只有 fixture 章節適用）；ch05 分鏡 s17b「同一刻寫入」說法過頭、s30 說主張只有中文（其實有 `claim_en`）。
 
 - 產線 repo 的未追蹤資料夾 `episodes/measure01/` 已查：是另一個專案留下的試轉檔，沒有別的窗在做，本計畫不動它。
 - P0d 留下的低等問題（不擋合併，還沒排進任何片）：同一筆訂單開兩個付款分頁可能付兩次，系統只記帳、不示警（`internal/repository/payments.go`），建議寫 warn log 並在契約註明；故意弄壞驗證 6b 在「第二次開始付款回 409」就紅了，沒有單獨證明三條新的入帳檢查有用；訂單編號到 10 位數時交易編號會超過綠界的 20 字元上限，程式沒擋；契約允許交易編號 `T` 後面有大寫字母，`go-shop` 只收小寫；`docs/scripts/ep07.md`（中英）還寫著重複付款「沒處理」；tag 名 `ep14-pay-and-orders` 不在 `CLAUDE.md` 列的 tag 清單裡。

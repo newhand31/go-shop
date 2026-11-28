@@ -11,7 +11,19 @@
   - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
 
-- [ ] **接手多語言計畫指揮窗，等 P0b 先行章再派 P1 第二段與 P0f**（交接自「go-shop｜指揮多語言計畫 驗 P1 第一段｜進行中」）
+- [ ] **接手多語言計畫指揮窗，派 P1 第二段並盯 P0b 其餘 12 章**（交接自「go-shop｜指揮多語言計畫 併 P0b 產線｜進行中」）
+  - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在每個系列的先行章、機器修三輪不過、公開發佈、P7 動工前介入。
+  - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。標頭寫「交接中」，新窗認領後改成自己（第八個指揮窗）。
+  - 現況：P0b 先行章段完成：PR 49 已併，產線分支 2026-11-28 併進產線 `main`（3d39216），驗收與兩輪 checker 的結果在計畫檔 P0b 證據欄。
+  - 現況：下一步是派 P1 第二段（cs-shop ch01 的英文口播、中文 CC、配音、店面錄影，照計畫檔 P1 節與「每章的驗收」後端章欄），依賴已滿足。派之前把驗收指令補成可執行的；它跟 P0b 12 章窗都動產線 repo，兩條線的檔案要分開（P1 只動 `episodes/cs-ch01*` 這類新資料夾，不改 scripts/src），配音與渲染會搶記憶體，派前先跟 12 章窗協調時段。同時最多兩條線：P0b 與 P1。
+  - 現況：P0b 其餘 12 章執行窗 `local_4753e6ab-e501-46b2-93dd-4579e9d79638`，ch11、ch13 的子代理在等作者核准 Bash 權限；已請它把產線 `main` merge 進 `feat/p0b-chapters-a`。ch05 的 F1–F4 等 12 章配音告一段落再請先行章窗 `local_fa860364-f52d-4995-abab-ed8e9681a99f` 修。
+  - 現況：P0f 點頭欄空著，不派。auto mode 擋 `gh pr merge`，go-shop 的 PR 由作者按合併；產線是本機 repo，`git merge --no-ff` 可以在本機做。
+  - 現況：封存：協調窗 2、第五、第六指揮窗 2026-11-28 已封存。先行章窗與它的上層（`local_ec80beeb…`、`local_2e9951ea…`、`local_cb9273e6…`）在 P0b 做完前不封，封父窗會連帶封掉子窗。
+  - 檔案：`docs/plans/2026-11-24-polyglot-program.md`、`state/TODO.md`；另外的 repo：影片產線、`shop-contract`、`shop-web`、`cs-shop`。
+  - 完成的樣子：計畫檔每片都是 accepted、handoff 或 dropped。
+  - 工作鍵：newhand31/go-shop:polyglot-program
+
+- [x] **接手多語言計畫指揮窗，等 P0b 先行章再派 P1 第二段與 P0f**（交接自「go-shop｜指揮多語言計畫 驗 P1 第一段｜進行中」）
   - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在每個系列的先行章、機器修三輪不過、公開發佈、P7 動工前介入。
   - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。標頭的「指揮台」要改成新窗（第七個指揮窗）。
   - 現況：P1 第一段 2026-11-27 accepted：`newhand31/cs-shop#1`、`newhand31/shop-contract#3` 已併，`ep01` 在 3468d70，作者同意的那次移動已用掉，不再動。P1 狀態仍是 `running`，第二段（配音與影片）等 P0b 的產線分支併進產線 `main` 才派。ch02 起的「要失敗」主張檢查要加 `output_contains`。cs-shop 還沒有 CI。
