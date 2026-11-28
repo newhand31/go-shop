@@ -11,7 +11,18 @@
   - 完成的樣子：四章的事故情境各有一條掛 `C` 的重現主張，或規範改寫成不要求。配音與英文版的實作由計畫的 P0a、P0b 驗收。
   - 工作鍵：newhand31/go-shop:feat/plain-voice-and-incidents
 
-- [ ] **接手多語言計畫指揮窗，驗 P1 第一段並等 P0b 先行章**（交接自「go-shop｜指揮多語言計畫 驗併 P0e2｜進行中」）
+- [ ] **接手多語言計畫指揮窗，等 P0b 先行章再派 P1 第二段與 P0f**（交接自「go-shop｜指揮多語言計畫 驗 P1 第一段｜進行中」）
+  - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在每個系列的先行章、機器修三輪不過、公開發佈、P7 動工前介入。
+  - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。標頭的「指揮台」要改成新窗（第七個指揮窗）。
+  - 現況：P1 第一段 2026-11-27 accepted：`newhand31/cs-shop#1`、`newhand31/shop-contract#3` 已併，`ep01` 在 3468d70，作者同意的那次移動已用掉，不再動。P1 狀態仍是 `running`，第二段（配音與影片）等 P0b 的產線分支併進產線 `main` 才派。ch02 起的「要失敗」主張檢查要加 `output_contains`。cs-shop 還沒有 CI。
+  - 現況：P0b 計畫檔仍寫 `running`，執行窗 `local_fa860364-f52d-4995-abab-ed8e9681a99f`。第六個指揮窗交接時（2026-11-28）`go-shop` 的 `feat/p0b-english-series` 已併（PR 49），計畫檔還沒跟上；產線分支有沒有併進產線 `main`、ch05 先行章作者看過沒，新指揮窗要用 git 實查，不採自述。
+  - 現況：P0f 已改成另外上傳的中文長片（BreezyVoice，作者定「另外上傳」），點頭欄空著，不派；也要等 P0b 的產線分支。
+  - 現況：封存：P0e2 執行窗 `local_6a2b2027-1ed9-40b2-9515-ea2543750e80` 仍因遠端控制連線封不掉，它的上層要等它封完；P0b 的上層在 P0b 做完前不封。P1 執行窗 `local_e192a284-fdb6-42d7-a1ab-d6babe066f2a` 已請它收尾。
+  - 檔案：`docs/plans/2026-11-24-polyglot-program.md`、`state/TODO.md`；另外的 repo：影片產線、`shop-contract`、`shop-web`、`cs-shop`。
+  - 完成的樣子：計畫檔每片都是 accepted、handoff 或 dropped。
+  - 工作鍵：newhand31/go-shop:polyglot-program
+
+- [x] **接手多語言計畫指揮窗，驗 P1 第一段並等 P0b 先行章**（交接自「go-shop｜指揮多語言計畫 驗併 P0e2｜進行中」）
   - 目標：照 `docs/plans/2026-11-24-polyglot-program.md` 繼續推進剩下的分片。作者只在四個時點介入：每個系列的先行章、機器修三輪不過、公開發佈、P7 全端旗艦片動工前。
   - 現況：計畫檔是正本：`docs/plans/2026-11-24-polyglot-program.md`。每片的狀態、執行窗的 id 與工作鍵、證據都在各片那一節。標頭的「指揮台」要改成新窗。
   - 現況：P0a、P0c、P0d、P0e1、P0e2 是 `accepted`。P0e2 的 PR `newhand31/shop-web#2` 2026-11-26 已併（merge commit `62dbdf5`）；計畫檔的更新是 PR 38，已併。
